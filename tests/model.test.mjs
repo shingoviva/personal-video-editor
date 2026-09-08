@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';
+import{project,clip,timing,sourceOffset,outputOffset,sequence,total,sanitize}from'../dist/model.js';
+const m={id:'m',duration:12,width:1920,height:1080};
+for(const curve of ['constant','linear','ease-in','ease-out','ease-in-out']){let c={...clip(m),speed:.05,endSpeed:20,curve};const d=timing(c).duration;assert.ok(d>0);for(let i=0;i<=100;i++){let s=12*i/100;assert.ok(Math.abs(sourceOffset(outputOffset(s,c),c)-s)<1e-8)}if(curve==='constant')assert.equal(d,240)}
+let p=project();p.media=[m];p.clips=[{...clip(m),out:2,speed:2},{...clip(m),in:2,out:3,speed:.1},{...clip(m),gap:2}];assert.equal(total(p),13);assert.deepEqual(sequence(p).map(r=>r.start),[0,1,11]);assert.equal(sanitize(JSON.parse(JSON.stringify(p))).clips.length,3);assert.throws(()=>sanitize({version:2,clips:[],media:[]}));console.log('Timing inverse, extremes, ramp curves, gaps, serialization: PASS');

@@ -24,6 +24,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
    if not self.auth():return self.send_json({'error':'Launch.command から起動してください。'},401)
    if p=='/api/health':return self.send_json(core.capabilities())
    if p=='/api/media':return self.send_json([core.public_media(m) for m in core.MEDIA.values()])
+   if p.startswith('/api/diagnostic/'):
+    id=p.rsplit('/',1)[1]
+    if not re.fullmatch(r'[a-zA-Z0-9_-]{1,80}',id):raise ValueError('Invalid job id')
+    f=core.ROOT/'logs'/f'{id}.json'
+    if not f.is_file():return self.send_json({'error':'診断記録がありません。'},404)
+    return self.send_json(json.loads(f.read_text()))
    if p.startswith('/api/job/'):
     j=core.JOBS.get(p.rsplit('/',1)[1]);return self.send_json({k:v for k,v in j.items() if not k.startswith('_')} if j else {'error':'Job not found'},200 if j else 404)
    if p=='/api/projects':return self.send_json([{'id':f.stem,'name':json.loads(f.read_text()).get('name',f.stem)} for f in (core.ROOT/'projects').glob('*.json')])
@@ -93,7 +99,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     id=d.get('id','')
     if not re.fullmatch(r'[a-zA-Z0-9-]{1,80}',id):raise ValueError('Invalid project id')
     if d.get('version')!=1:raise ValueError('Invalid project')
-    f=core.ROOT/'projects'/f'{id}.json';temp=f.with_suffix('.tmp');temp.write_text(json.dumps(d,ensure_ascii=False));temp.replace(f);return self.send_json({'ok':True})
+    f=core.ROOT/'projects'/f'{id}.json';temp=f.with_name(f.stem+'-'+uuid.uuid4().hex+'.tmp');temp.write_text(json.dumps(d,ensure_ascii=False));temp.replace(f);return self.send_json({'ok':True})
    return self.send_json({'error':'Unknown route'},404)
   except (BrokenPipeError,ConnectionResetError):pass
   except Exception as e:self.send_json({'error':str(e)},400)

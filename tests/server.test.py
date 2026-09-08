@@ -25,5 +25,8 @@ with tempfile.TemporaryDirectory(prefix='pve-http-') as td:
    if r['status'] in ('done','error'):break
    time.sleep(.1)
   assert r['status']=='done',r
-  print('Auth, origin guard, range serving, project roundtrip, media streaming, async proxy job: PASS')
+  diagnostic=json.load(opener.open(base+'/api/diagnostic/'+j));assert diagnostic['job']==j and any(e.get('validation')=='passed' for e in diagnostic['events'])
+  try:urllib.request.urlopen(base+'/api/diagnostic/'+j);raise AssertionError('unauthenticated diagnostic accepted')
+  except urllib.error.HTTPError as e:assert e.code==401
+  print('Auth, origin guard, range serving, project roundtrip, media streaming, async proxy job, protected diagnostics: PASS')
  finally:proc.terminate();proc.wait(timeout=10)

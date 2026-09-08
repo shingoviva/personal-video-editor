@@ -2,7 +2,7 @@
 import array, bisect, collections, hashlib, json, math, os, pathlib, shutil, statistics, subprocess, threading, time, uuid, struct, zlib
 ROOT=pathlib.Path(os.environ.get('PVE_DATA',str(pathlib.Path.home()/'Library/Application Support/Personal Video Editor')))
 ROOT.mkdir(parents=True,exist_ok=True)
-for name in ('media','cache','exports','projects'): (ROOT/name).mkdir(exist_ok=True)
+for name in ('media','cache','exports','projects','logs'): (ROOT/name).mkdir(exist_ok=True)
 FFMPEG=shutil.which('ffmpeg'); FFPROBE=shutil.which('ffprobe')
 BASE=[FFMPEG or 'ffmpeg','-hide_banner','-loglevel','warning','-nostdin','-y','-threads','2','-filter_threads','2','-filter_complex_threads','2']
 JOBS={}; MEDIA={}; GATE=threading.Lock()
@@ -23,7 +23,7 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.1.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
@@ -41,13 +41,56 @@ def inspect(path,id,name):
 def save_media(m):
  MEDIA[m['id']]=m;p=ROOT/'media'/f"{m['id']}.json";tmp=p.with_suffix('.tmp');tmp.write_text(json.dumps(m));tmp.replace(p)
 
-def public_media(m):return {k:v for k,v in m.items() if k!='path'}
+def public_media(m):
+ result={k:v for k,v in m.items() if k!='path'}
+ if result.get('proxy') and not (ROOT/'cache'/result['proxy']).is_file():result['proxy']=None
+ return result
 
 def check(job):
  if job.get('cancel'):raise InterruptedError('処理をキャンセルしました。')
 
-def run(job,args,duration=1,start=0,span=1,cwd=None):
- check(job);log=collections.deque(maxlen=32)
+class OutputValidationError(RuntimeError):
+ pass
+
+
+def validate_output(path,expected_duration=None,require_audio=False):
+ """Check finalized container metadata before another process may consume it."""
+ path=pathlib.Path(path)
+ if not path.is_file() or path.stat().st_size<64:
+  raise OutputValidationError('生成ファイルが空、または完成していません。')
+ r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=60)
+ if r.returncode:
+  raise OutputValidationError('生成ファイルを読み取れません。'+r.stderr[-900:])
+ try:d=json.loads(r.stdout)
+ except ValueError:raise OutputValidationError('生成ファイルの情報を取得できません。')
+ streams=d.get('streams',[]);video=next((v for v in streams if v.get('codec_type')=='video'),None);audio=next((a for a in streams if a.get('codec_type')=='audio'),None)
+ if path.suffix=='.mp4' and not video:raise OutputValidationError('生成したMP4に映像がありません。')
+ if path.suffix=='.wav' and not audio:raise OutputValidationError('生成した音声が空です。')
+ if require_audio and not audio:raise OutputValidationError('書き出し音声が見つかりません。')
+ primary=video or audio or {};duration=number(primary.get('duration',d.get('format',{}).get('duration')),0)
+ if duration<=0:raise OutputValidationError('生成した映像・音声の長さが0です。')
+ tolerance=max(.15,2/(ratio(video.get('avg_frame_rate','30/1')) or 30)) if video else .15
+ if expected_duration is not None and abs(duration-expected_duration)>tolerance:
+  raise OutputValidationError(f'出力の長さが一致しません（予定 {expected_duration:.3f}秒 / 出力 {duration:.3f}秒）。')
+ if require_audio and video:
+  audio_duration=number(audio.get('duration',d.get('format',{}).get('duration')),0)
+  if abs(audio_duration-duration)>tolerance:raise OutputValidationError('映像と音声の長さが一致しません。')
+ return {'duration':duration,'bytes':path.stat().st_size,'video':video.get('codec_name') if video else None,'audio':audio.get('codec_name') if audio else None}
+
+
+def _record(job,entry):
+ events=job.setdefault('_events',[]);events.append(entry)
+ if len(events)>200:del events[:-200]
+ id=job.get('id')
+ if id and all(c.isalnum() or c in '-_' for c in str(id)):
+  path=ROOT/'logs'/f'{id}.json';temp=path.with_suffix('.tmp')
+  try:
+   temp.write_text(json.dumps({'job':id,'events':events},ensure_ascii=False,indent=2));temp.replace(path)
+  except OSError:pass # A log write must not turn a valid render into a failed render.
+
+
+def _run_once(job,args,duration=1,start=0,span=1,cwd=None):
+ check(job);log=collections.deque(maxlen=40);began=time.monotonic();stage=job.get('operation','動画処理')
  proc=subprocess.Popen(BASE+['-progress','pipe:1','-nostats']+list(map(str,args)),stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,cwd=cwd)
  job['_proc']=proc
  def stderr():
@@ -58,12 +101,47 @@ def run(job,args,duration=1,start=0,span=1,cwd=None):
    check(job)
    if line.startswith('out_time_us='):
     value=number(line.split('=')[1])/1e6
-    job['progress']=min(.999,start+span*max(0,min(1,value/max(.001,duration))))
+    job['progress']=max(job.get('progress',0),min(.999,start+span*max(0,min(1,value/max(.001,duration)))))
   code=proc.wait();t.join();check(job)
-  if code:raise RuntimeError(''.join(log)[-2200:])
+  if code:raise RuntimeError(''.join(log)[-2200:] or f'動画処理を終了できませんでした（code {code}）。')
  finally:
   if proc.poll() is None:proc.kill();proc.wait()
+  t.join(timeout=2)
+  _record(job,{'stage':stage,'exitCode':proc.returncode,'seconds':round(time.monotonic()-began,3),'stderr':''.join(log)[-2200:]})
   proc.stdout.close();proc.stderr.close();job.pop('_proc',None)
+
+
+def run(job,args,duration=1,start=0,span=1,cwd=None,verify_decode=False):
+ """Only expose completed outputs; retry invalid generated media once, never input/config errors."""
+ args=list(map(str,args));suffix=pathlib.Path(args[-1]).suffix.lower()
+ if suffix not in ('.mp4','.wav','.jpg','.png'):
+  return _run_once(job,args,duration,start,span,cwd)
+ out=pathlib.Path(args[-1]);out=out if out.is_absolute() else pathlib.Path(cwd or pathlib.Path.cwd())/out
+ staged=out.with_name('.'+out.stem+'-'+uuid.uuid4().hex+'.tmp'+suffix)
+ original_stage=job.get('operation','動画処理')
+ try:
+  for attempt in range(2):
+   check(job);staged.unlink(missing_ok=True);call_args=[*args[:-1],str(staged)]
+   try:
+    job['operation']=original_stage if attempt==0 else original_stage+'（再生成）'
+    _run_once(job,call_args,duration,start,span,cwd)
+    check(job)
+    if suffix in ('.mp4','.wav'):
+     job['operation']='生成ファイルを検証中'
+     verified=validate_output(staged,duration,require_audio=verify_decode)
+     if verify_decode:
+      job['operation']='映像・音声を最後まで検証中'
+      try:_run_once(job,['-xerror','-err_detect','explode','-i',str(staged),'-map','0:v:0','-map','0:a:0','-f','null','-'],duration,.98,.019)
+      except RuntimeError as e:raise OutputValidationError('完成動画の再生検証に失敗しました。'+str(e)) from e
+     _record(job,{'stage':original_stage,'attempt':attempt+1,'validation':'passed',**verified})
+    elif not staged.is_file() or staged.stat().st_size==0:
+     raise OutputValidationError('画像の生成が完了していません。')
+    check(job);staged.replace(out);job['operation']=original_stage;return
+   except OutputValidationError as e:
+    _record(job,{'stage':original_stage,'attempt':attempt+1,'validation':'failed','reason':str(e)})
+    if attempt:raise
+    job['recoveredOutputs']=job.get('recoveredOutputs',0)+1
+ finally:staged.unlink(missing_ok=True)
 
 def submit(kind,fn,*args):
  id=uuid.uuid4().hex;j={'id':id,'kind':kind,'status':'queued','progress':0,'operation':'待機中','cancel':False};JOBS[id]=j
@@ -123,6 +201,9 @@ def prepare(job,id):
  # Small timestamp quantization differences do not imply VFR.
  m['rateMode']='VFR' if deltas and max(deltas)-min(deltas)>.001 else 'CFR';save_media(m)
  out=ROOT/'cache'/f'{id}-proxy.mp4';job['operation']='SDRプロキシを生成中' if m['hdr'] else '720pプロキシを生成中'
+ if out.exists():
+  try:validate_output(out,m['duration'])
+  except OutputValidationError:out.unlink();m['proxy']=None;save_media(m)
  if not out.exists():
   vf=tone(m,1280)+["scale=w='if(gte(iw,ih),min(iw,1280),-2)':h='if(gte(iw,ih),-2,min(ih,720))'",'fps=30','setsar=1']
   temp=out.with_name(out.stem+'.part.mp4')
@@ -269,6 +350,7 @@ def render(job,project,preview=False):
    graph.append(f'[mix]afade=t=in:d={max(.001,fadein)},afade=t=out:st={max(0,duration+hold-fadeout)}:d={max(.001,fadeout)}[a]')
    part=work/f'clip-{idx:04d}.mp4';outputs.append(part)
    script=work/'graph.txt';script.write_text(';\n'.join(graph))
+   job['operation']=f'クリップ {idx+1}/{len(clips)} を書き出し中'
    run(job,input_args+['-filter_complex_script',script,'-map','[v]','-map','[a]','-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',crf,'-c:a','aac','-b:a','192k','-ar','48000','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',part],duration+hold,done/max(total,.001)*.85,(duration+hold)/max(total,.001)*.85)
    done+=duration+hold
    if (work/'stabilized.mp4').exists():(work/'stabilized.mp4').unlink()
@@ -289,8 +371,8 @@ def render(job,project,preview=False):
   if final_vf:args+=['-vf',','.join(final_vf),'-c:v','libx264','-preset','fast','-threads','2','-crf',crf]
   else:args+=['-c:v','copy']
   args+=['-c:a','aac' if bg else 'copy','-t',total,'-movflags','+faststart',out]
-  job['operation']='MP4を仕上げ中';run(job,args,total,.89,.1)
-  return {'file':out.name,'url':('/cache/' if preview else '/exports/')+out.name,'duration':total,'width':w,'height':h,'fps':fps,'preview':preview}
+  job['operation']='MP4を仕上げ中';run(job,args,total,.89,.09,verify_decode=True)
+  return {'file':out.name,'url':('/cache/' if preview else '/exports/')+out.name,'duration':total,'width':w,'height':h,'fps':fps,'preview':preview,'verified':True,'recoveredOutputs':job.get('recoveredOutputs',0)}
  finally:shutil.rmtree(work,ignore_errors=True)
 
 def analyze(job,id,intent='HIGH FASHION'):

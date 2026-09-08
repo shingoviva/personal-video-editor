@@ -1,0 +1,8 @@
+let connection;
+function db(){if(!connection)connection=new Promise((resolve,reject)=>{const r=indexedDB.open('pve.media.v1',1);r.onupgradeneeded=()=>r.result.createObjectStore('files');r.onsuccess=()=>resolve(r.result);r.onerror=()=>{connection=null;reject(r.error)}});return connection;}
+export async function retainFile(id,file,signal){
+ if(signal?.aborted)throw signal.reason;const d=await db();const estimate=await navigator.storage?.estimate?.();if(estimate?.quota&&estimate.quota-estimate.usage<file.size*1.15)throw Error('端末の空き容量が不足しています。');
+ await new Promise((resolve,reject)=>{const tx=d.transaction('files','readwrite');const abort=()=>{try{tx.abort()}catch{}};signal?.addEventListener('abort',abort,{once:true});tx.objectStore('files').put(file,id);tx.oncomplete=()=>{signal?.removeEventListener('abort',abort);resolve()};tx.onerror=tx.onabort=()=>{signal?.removeEventListener('abort',abort);reject(tx.error||new DOMException('保存を中止しました。','AbortError'))}});
+}
+export async function restoreFile(id){const d=await db();return new Promise((resolve,reject)=>{const r=d.transaction('files').objectStore('files').get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});}
+export async function forgetUnused(ids){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction('files','readwrite'),s=tx.objectStore('files'),r=s.openKeyCursor();r.onsuccess=()=>{const c=r.result;if(c){if(!ids.has(c.key))s.delete(c.key);c.continue()}};tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});}

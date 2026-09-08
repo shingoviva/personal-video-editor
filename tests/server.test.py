@@ -17,7 +17,8 @@ with tempfile.TemporaryDirectory(prefix='pve-http-') as td:
   try:opener.open(req);raise AssertionError('foreign origin accepted')
   except urllib.error.HTTPError as e:assert e.code==403
   req=urllib.request.Request(base+'/app.js',headers={'Range':'bytes=0-9'});r=opener.open(req);assert r.status==206 and len(r.read())==10
-  fixture=pathlib.Path('/tmp/pve-validation/source.mp4');req=urllib.request.Request(base+'/api/upload',data=fixture.read_bytes(),headers={'X-Filename':'sample.mp4'});m=json.load(opener.open(req));assert m['width']==640
+  module=opener.open(base+'/vendor/mediabunny.mjs');assert 'javascript' in module.headers.get('Content-Type','')
+  fixture=repo/'dist/device-test.mp4';req=urllib.request.Request(base+'/api/upload',data=fixture.read_bytes(),headers={'X-Filename':'sample.mp4'});m=json.load(opener.open(req));assert m['width']==160
   assert len(json.load(opener.open(base+'/api/media')))==1
   req=urllib.request.Request(base+'/api/prepare',data=json.dumps({'media':m['id']}).encode());j=json.load(opener.open(req))['job']
   for _ in range(100):

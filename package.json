@@ -1,1 +1,17 @@
-{"name":"personal-video-editor","version":"1.1.0","private":true,"type":"module","scripts":{"dev":"vite","build":"node scripts/check-static.mjs","test":"node tests/model.test.mjs && node tests/media-state.test.mjs"},"devDependencies":{"vite":"8.0.13"}}
+{
+  "name": "personal-video-editor",
+  "version": "1.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "node scripts/check-static.mjs",
+    "test": "node tests/model.test.mjs && node tests/media-state.test.mjs && node tests/mobile.test.mjs && node tests/mobile-container.test.mjs && node tests/mobile-audio.test.mjs"
+  },
+  "devDependencies": {
+    "vite": "8.0.13"
+  },
+  "dependencies": {
+    "mediabunny": "1.56.0"
+  }
+}

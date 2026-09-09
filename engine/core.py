@@ -1,4 +1,6 @@
 """Bounded-memory, non-destructive native media pipeline. Python standard library only."""
+from color_engine import filters as matched_color_filters
+import copy
 import array, bisect, collections, hashlib, json, math, os, pathlib, shutil, statistics, subprocess, threading, time, uuid, struct, zlib
 ROOT=pathlib.Path(os.environ.get('PVE_DATA',str(pathlib.Path.home()/'Library/Application Support/Personal Video Editor')))
 ROOT.mkdir(parents=True,exist_ok=True)
@@ -23,7 +25,7 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.4.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.5.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
@@ -258,6 +260,8 @@ def curve_value(t,a,b,kind):
  return a+(b-a)*t
 
 def timing(c):
+ if c.get('freezeDuration'):
+  d=number(c['freezeDuration'],1,1/30,60);x=max(.00001,c['out']-c['in']);return [(0,0),(x,d)],[(0,x,1,d)]
  if c.get('timingBase') and not c.get('gap'):
   base={k:c['timingBase'].get(k) for k in ('in','out','speed','endSpeed','curve')}
   nodes0,pieces0=timing(base);pieces=[];nodes=[(0,0)];elapsed=0
@@ -301,15 +305,19 @@ def atempo(speed):
  while speed>2:filters.append('atempo=2');speed/=2
  filters.append(f'atempo={speed:.9f}');return ','.join(filters)
 
-def color_filters(col):
- e=number(col.get('exposure'),0,-3,3);con=number(col.get('contrast'),0,-100,100);sat=number(col.get('saturation'),0,-100,100);vib=number(col.get('vibrance'),0,-100,100)
- # Exposure is linear RGB gain; controls use bounded tonal masks on each RGB channel.
- hi=number(col.get('highlights'),0,-100,100)/400;sh=number(col.get('shadows'),0,-100,100)/400;wh=number(col.get('whites'),0,-100,100)/500;bl=number(col.get('blacks'),0,-100,100)/500;temp=number(col.get('temperature'),0,-100,100)/400;tint=number(col.get('tint'),0,-100,100)/400
- gain=2**e;cf=1+con/150
- common=f'clip((val/255*{gain}-.5)*{cf}+.5+{sh}*(1-val/255)^2+{hi}*(val/255)^2+{wh}*(val/255)^4+{bl}*(1-val/255)^4'
- rgb=[]
- for k,bias in [('r',temp+tint/2),('g',-tint),('b',-temp+tint/2)]:rgb.append(f"{k}='255*{common}+{bias},0,1)'")
- return ['format=rgb24','lutrgb='+':'.join(rgb),f'eq=saturation={1+sat/100}',f'vibrance=intensity={vib/100}']
+def color_filters(col,amount=1):
+ return matched_color_filters(col,ROOT/'cache',amount)
+
+def freeze_seek(job,m,at):
+ """Resolve the displayed frame by its timestamp, including VFR / end-of-file."""
+ check(job)
+ r=subprocess.run([FFPROBE,'-v','error','-select_streams','v:0','-read_intervals',f'{max(0,at-2)}%{at+.1}','-show_frames','-show_entries','frame=best_effort_timestamp_time','-of','json',m['path']],capture_output=True,text=True,timeout=90)
+ check(job)
+ if r.returncode:raise ValueError('静止フレームの時刻を確認できません。')
+ stamps=[float(f['best_effort_timestamp_time']) for f in json.loads(r.stdout).get('frames',[]) if 'best_effort_timestamp_time' in f]
+ previous=[s for s in stamps if s<=at+1e-7]
+ if not previous:raise ValueError('静止フレームを読み込めません。少し前の位置で再試行してください。')
+ return max(previous)
 
 def visible_clips(clips,fps=None):
  """Absolute two-track visibility; upper/later clips replace image and source audio."""
@@ -338,21 +346,31 @@ def visible_clips(clips,fps=None):
   windows=quantized
  return windows
 
-def render(job,project,preview=False):
- clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
+def render(job,project,preview=False,_token=None,_size=None):
+ clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
+ raw_clips=copy.deepcopy(clips)
  clips=visible_clips(clips,fps)
  crf={'Preview':28,'Standard':21,'High':18,'Maximum':15}.get(exp.get('quality'),21)
- work=ROOT/'cache'/('render-'+job['id']);work.mkdir();outputs=[];total=sum(c['_window'][1] for c in clips);done=0
+ token=_token or job['id']
+ work=ROOT/'cache'/('render-'+token);work.mkdir();outputs=[];total=sum(c['_window'][1] for c in clips);done=0;lower_path=None
  try:
+  if any(c.get('layer')==1 and (c.get('fadeIn') or c.get('fadeOut') or c.get('opacity',1)<1) for c in raw_clips):
+   ends=[0.,0.];lower=[]
+   for c in raw_clips:
+    layer=1 if c.get('layer')==1 else 0;d=timing(c)[0][-1][1]+c.get('hold',0);start=c.get('start',ends[layer]);ends[layer]=max(ends[layer],start+d)
+    if layer==0:lower.append({**c,'start':start,'layer':0})
+   lower.append({'gap':.001,'start':max(0,total-.001)})
+   base={**project,'clips':lower,'texts':[],'effects':[],'bgm':{}}
+   lr=render(job,base,preview,_token=token+'-lower',_size=(w,h));lower_path=ROOT/('cache' if preview else 'exports')/lr['file']
   for idx,c in enumerate(clips):
    if c.get('gap'):
     d=c['_window'][1];part=work/f'clip-{idx:04d}.mp4';outputs.append(part);job['operation']='空白区間を生成中'
     run(job,['-f','lavfi','-i',f'color=c=black:s={w}x{h}:r={fps}','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t',d,'-c:v','libx264','-preset','veryfast','-threads','2','-crf',crf,'-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-video_track_timescale','90000',part],d,done/max(total,.001)*.85,d/max(total,.001)*.85)
     done+=d;continue
    check(job);m=MEDIA[c['media']];nodes,pieces=timing(c);duration=nodes[-1][1];hold=number(c.get('hold'),0,0,10);vf=tone(m);source=m['path'];source_duration=c['out']-c['in'];seek=c['in'];job['operation']=f'クリップ {idx+1}/{len(clips)} を処理中'
-   stabil='OFF' if m.get('kind')=='image' else c.get('stabilization','OFF')
+   stabil='OFF' if m.get('kind')=='image' or c.get('freezeDuration') else c.get('stabilization','OFF')
    if stabil!='OFF':
     if not capabilities()['stabilization']:raise ValueError('このFFmpegにはvidstabがありません。libvidstab対応版が必要です。')
     # Stabilize before time remapping. Each selected source segment is streamed to disk, not RAM.
@@ -362,20 +380,23 @@ def render(job,project,preview=False):
     job['operation']='手ぶれを補正中'
     run(job,['-ss',seek,'-i',source,'-t',source_duration,'-vf',','.join(vf+[f'vidstabtransform=input={trf}:smoothing={smooth}:optzoom=1:crop=black','format=yuv420p']),'-c:v','libx264','-preset','veryfast','-crf','16','-threads','2','-c:a','aac',pre],source_duration,done/max(total,.001)*.85,.03,cwd=work)
     source=str(pre);seek=0;vf=[]
+   if c.get('freezeDuration'):
+    if m.get('kind')!='image':seek=freeze_seek(job,m,number(c.get('freezeAt'),c['in'],0,m['duration']));source_duration=max(.2,source_duration)
+    vf+=['select=eq(n\\,0)']
    if m.get('kind')=='image':vf+=['format=rgba','premultiply=inplace=1','format=rgb24']
    scale=number(c.get('scale'),1,1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1);ar=w/h
    vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/{scale}/2)*2':h='trunc(min(ih,iw/{ar})/{scale}/2)*2':x='(iw-ow)*{x}':y='(ih-oh)*{y}'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
-   vf+=color_filters(c.get('color',{}));vf+=['settb=AVTB','setpts=PTS-STARTPTS']
+   vf+=color_filters(c.get('color',{}),number(c.get('lookAmount'),1,0,1.5));vf+=['settb=AVTB','setpts=PTS-STARTPTS']
    # Use the same 32-piece integral as the browser timeline. Source PTS handles VFR.
    expr=f'{duration:.9f}'
    for (x0,y0),(x1,y1) in reversed(list(zip(nodes,nodes[1:]))):expr=f'if(lt(T,{x1:.9f}),{y0:.9f}+(T-{x0:.9f})*{(y1-y0)/(x1-x0):.9f},{expr})'
    vf.append(f"setpts='{expr}/TB'")
    if c.get('interpolation')=='blend':vf.append(f'framerate=fps={fps}:interp_start=0:interp_end=255:scene=100')
    else:vf.append(f'fps={fps}')
-   vf+=['fps='+str(fps),'tpad=stop_mode=clone:stop=-1',f'trim=duration={duration+hold}','format=yuv420p']
+   vf+=['fps='+str(fps),'tpad=stop_mode=clone:stop=-1',f'trim=duration={duration+hold}','scale=out_color_matrix=bt709:out_range=tv','format=yuv420p','setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709']
    graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=number(audio.get('volume'),1,0,2) if not audio.get('mute') else 0
    input_args=['-loop','1','-framerate',fps,'-t',source_duration,'-i',source] if m.get('kind')=='image' else ['-ss',seek,'-t',source_duration,'-i',source]
-   if m['audio'] and len(pieces)>1:
+   if m['audio'] and not c.get('freezeDuration') and len(pieces)>1:
     # Render ramp audio pieces sequentially to disk. No full-length asplit queues in RAM.
     audio_parts=[]
     for k,(a,b,s,length) in enumerate(pieces):
@@ -386,7 +407,7 @@ def render(job,project,preview=False):
     run(job,['-f','concat','-safe','0','-i',alist,'-c','copy',audio_ramp],duration,done/max(total,.001)*.85,0)
     input_args+=['-i',audio_ramp]
     graph.append(f'[1:a]volume={volume},apad,atrim=duration={duration+hold},asetpts=N/SR/TB[mix]')
-   elif m['audio']:
+   elif m['audio'] and not c.get('freezeDuration'):
     s=pieces[0][2]
     graph.append(f'[0:a]asetpts=PTS-STARTPTS,apad=pad_dur=1,{atempo(s)},volume={volume},apad,atrim=duration={duration+hold},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[mix]')
    else:graph.append(f'anullsrc=r=48000:cl=stereo,atrim=duration={duration+hold}[mix]')
@@ -395,6 +416,16 @@ def render(job,project,preview=False):
    offset,window_duration=c['_window']
    graph[0]=graph[0].replace('[v]',f',trim=start={offset}:duration={window_duration},setpts=PTS-STARTPTS[v]')
    graph[-1]=graph[-1].replace('[a]',f',atrim=start={offset}:duration={window_duration},asetpts=PTS-STARTPTS[a]')
+   fi=number(c.get('fadeIn'),0,0,(duration+hold)/2);fo=number(c.get('fadeOut'),0,0,(duration+hold)/2);opacity=number(c.get('opacity'),1,0,1)
+   if fi or fo or opacity<1:
+    ai=f'(T+{offset})/{fi}' if fi else '1';ao=f'({duration+hold}-T-{offset})/{fo}' if fo else '1'
+    alpha=f'{opacity}*max(0,min(1,min({ai},{ao})))'
+    graph[0]=graph[0].replace('[v]','[top]')
+    if c.get('layer')==1 and lower_path:
+     index=sum(1 for a in input_args if a=='-i');input_args+=['-ss',c['_at'],'-i',str(lower_path)]
+     graph.append(f'[{index}:v]setpts=PTS-STARTPTS[lower]')
+    else:graph.append(f'color=c=black:s={w}x{h}:r={fps}:d={window_duration}[lower]')
+    graph.append(f"[lower][top]blend=all_expr='A*(1-({alpha}))+B*({alpha})':shortest=1[v]")
    part=work/f'clip-{idx:04d}.mp4';outputs.append(part)
    script=work/'graph.txt';script.write_text(';\n'.join(graph))
    job['operation']=f'クリップ {idx+1}/{len(clips)} を書き出し中'
@@ -403,14 +434,29 @@ def render(job,project,preview=False):
    if (work/'stabilized.mp4').exists():(work/'stabilized.mp4').unlink()
   concat=work/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in outputs));joined=work/'joined.mp4'
   job['operation']='クリップを結合中';run(job,['-f','concat','-safe','0','-i',concat,'-c','copy',joined],total,.85,.04)
-  out=ROOT/('cache' if preview else 'exports')/(job['id']+'.mp4');bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[]
+  effects=project.get('effects',[])
+  if len(effects)>20:raise ValueError('画面効果は最大20個です。')
+  for i,e in enumerate(effects):
+   kind=e.get('type')
+   if kind not in ('flash','black-in','black-out'):continue
+   start=number(e.get('start'),0,0,total);d=number(e.get('duration'),.6,1/60,30);strength=number(e.get('strength'),1,0,1)
+   if start>=total or strength==0:continue
+   color='white' if kind=='flash' else 'black';direction='in' if kind=='black-out' else 'out';fx=work/f'fx-{i}.mp4'
+   graph=f"[1:v]format=rgba,colorchannelmixer=aa={strength},fade=t={direction}:st=0:d={d}:alpha=1,setpts=PTS-STARTPTS+{start}/TB[fx];[0:v][fx]overlay=eof_action=pass:repeatlast=0:enable='gte(t,{start})'[v]"
+   run(job,['-i',joined,'-f','lavfi','-t',d,'-i',f'color=c={color}:s={w}x{h}:r={fps}','-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,'-c:v','libx264','-preset','fast','-threads','2','-crf',crf,'-pix_fmt','yuv420p','-c:a','copy',fx],total,.89,0)
+   joined=fx
+  out=ROOT/('cache' if preview else 'exports')/(token+'.mp4');bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[]
   if len(texts)>20:raise ValueError('テキストは最大20個です。')
   for i,t in enumerate(texts):
    text=str(t.get('text',''))[:2000]
    if not text:continue
    txt=work/f'text-{i}.txt';txt.write_text(text,encoding='utf-8');size=number(t.get('size'),48,8,300)*h/1080;tx=number(t.get('x'),.5,0,1);ty=number(t.get('y'),.85,0,1);op=number(t.get('opacity'),1,0,1);a=number(t.get('start'),0,0,total);b=number(t.get('end'),total,0,total);fade=number(t.get('fade'),0,0,max(0,(b-a)/2));font={'Sans':'Arial','Serif':'Times New Roman','Mono':'Courier New'}.get(t.get('font'),'Arial');align=t.get('align','center');xp=f'w*{tx}' if align=='left' else f'w*{tx}-tw' if align=='right' else f'w*{tx}-tw/2'
-   alpha=f"{op}*min(1,min((t-{a})/{max(.00001,fade)},({b}-t)/{max(.00001,fade)}))" if fade else str(op)
-   final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor=white:fontsize={size}:x='{xp}':y='h*{ty}-th/2':alpha='{alpha}':enable='between(t,{a},{b})'")
+   fi=number(t.get('fadeIn',fade),0,0,max(0,(b-a)/2));fo=number(t.get('fadeOut',fade),0,0,max(0,(b-a)/2));md=number(t.get('motionDuration'),.4,.001,max(.001,(b-a)/2))
+   ai=f'(t-{a})/{fi}' if fi else '1';ao=f'({b}-t)/{fo}' if fo else '1';alpha=f'{op}*max(0,min(1,min({ai},{ao})))'
+   u=f'clip((t-{a})/{md},0,1)';v=f'clip((t-({b}-{md}))/{md},0,1)';shift=f'.06*(1-({u})*({u})*(3-2*({u}))-({v})*({v})*(3-2*({v})))';yp=f'h*{ty}-th/2'
+   if t.get('motion')=='rise':yp+=f'+h*({shift})'
+   if t.get('motion')=='slide-left':xp+=f'+w*({shift})'
+   final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor=white:fontsize={size}:x='{xp}':y='{yp}':alpha='{alpha}':enable='between(t,{a},{b})'")
   args=['-i',joined];bg=MEDIA.get(bgm.get('media'));graph=[]
   if bg:
    args+=['-stream_loop','-1','-i',bg['path']];vol=number(bgm.get('volume'),.3,0,2);fi=number(bgm.get('fadeIn'),0,0,total/2);fo=number(bgm.get('fadeOut'),0,0,total/2)
@@ -420,7 +466,9 @@ def render(job,project,preview=False):
   args+=['-c:a','aac' if bg else 'copy','-t',total,'-movflags','+faststart',out]
   job['operation']='MP4を仕上げ中';run(job,args,total,.89,.09,verify_decode=True)
   return {'file':out.name,'url':('/cache/' if preview else '/exports/')+out.name,'duration':total,'width':w,'height':h,'fps':fps,'preview':preview,'verified':True,'recoveredOutputs':job.get('recoveredOutputs',0)}
- finally:shutil.rmtree(work,ignore_errors=True)
+ finally:
+  shutil.rmtree(work,ignore_errors=True)
+  if lower_path:lower_path.unlink(missing_ok=True)
 
 def analyze(job,id,intent='HIGH FASHION'):
  m=MEDIA[id];src=ROOT/'cache'/m['proxy'] if m.get('proxy') else pathlib.Path(m['path']);fps=min(4,18000/max(m['duration'],1));w=h=64;n=w*h

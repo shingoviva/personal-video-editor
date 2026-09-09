@@ -27,7 +27,10 @@ export function bindTimeline({root,rows,duration,select,begin,finish,cancel,prev
     }else{
      Object.assign(c,structuredClone(origin));c.start=row.start;c.layer=row.layer;
      const d=timing(origin).nodes.at(-1)[1],sourceAt=t=>t<0?t*origin.speed:t>d?origin.out-origin.in+(t-d)*(origin.curve==='constant'?origin.speed:origin.endSpeed):sourceOffset(t,origin);
-     if(edge==='in'){
+     if(origin.freezeDuration){
+      if(edge==='in'){c.start=clamp(snapped(row.start+delta),Math.max(0,row.end-60),row.end-1/30);c.freezeDuration=row.end-c.start}
+      else c.freezeDuration=clamp(snapped(row.end+delta)-row.start,1/30,60);
+     }else if(edge==='in'){
       const desired=snapped(row.start+delta)-row.start;
       trimClip(c,'in',origin.in+sourceAt(desired),sourceLimit(media(c)));
       c.start=Math.max(0,row.end-timing(c).duration);

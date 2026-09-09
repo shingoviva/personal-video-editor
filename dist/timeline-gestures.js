@@ -23,7 +23,7 @@ export function bindTimeline({root,rows,duration,select,begin,finish,cancel,prev
     const c=row.clip;
     if(!edge){
      c.start=snapped(row.start+delta);c.layer=getLayer(ev.clientY)??row.layer;
-     el.style.top=(c.layer===row.layer?0:(c.layer===1?-1:1)*64)+'px';
+     el.style.top=((c.layer-row.layer)*(c.kind==='audio'?44:-52))+'px';
     }else{
      Object.assign(c,structuredClone(origin));c.start=row.start;c.layer=row.layer;
      const d=timing(origin).nodes.at(-1)[1],sourceAt=t=>t<0?t*origin.speed:t>d?origin.out-origin.in+(t-d)*(origin.curve==='constant'?origin.speed:origin.endSpeed):sourceOffset(t,origin);

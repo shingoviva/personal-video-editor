@@ -1,12 +1,12 @@
 {
   "name": "personal-video-editor",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/check-static.mjs",
-    "test": "node tests/creative.test.mjs && node tests/model.test.mjs && node tests/assets.test.mjs && node tests/layers.test.mjs && node tests/gestures.test.mjs && node tests/media-state.test.mjs && node tests/mobile.test.mjs && node tests/mobile-container.test.mjs && node tests/mobile-audio.test.mjs"
+    "test": "node tests/multitrack.test.mjs && node tests/mobile-multitrack.test.mjs && node tests/creative.test.mjs && node tests/model.test.mjs && node tests/assets.test.mjs && node tests/layers.test.mjs && node tests/gestures.test.mjs && node tests/media-state.test.mjs && node tests/mobile.test.mjs && node tests/mobile-container.test.mjs && node tests/mobile-audio.test.mjs"
   },
   "devDependencies": {
     "vite": "8.0.13"

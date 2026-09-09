@@ -1,3 +1,4 @@
+from audio_engine import validate_audio,extent as audio_extent,render_tracks
 """Bounded-memory, non-destructive native media pipeline. Python standard library only."""
 from color_engine import filters as matched_color_filters
 import copy
@@ -25,7 +26,7 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.5.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.6.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
@@ -320,10 +321,10 @@ def freeze_seek(job,m,at):
  return max(previous)
 
 def visible_clips(clips,fps=None):
- """Absolute two-track visibility; upper/later clips replace image and source audio."""
- ends=[0.,0.];rows=[]
+ """Absolute three-track visibility; upper/later clips replace image and source audio."""
+ ends=[0.,0.,0.];rows=[]
  for c in clips:
-  layer=1 if c.get('layer')==1 else 0
+  layer=int(number(c.get('layer'),0,0,2))
   d=timing(c)[0][-1][1]+(0 if c.get('gap') else number(c.get('hold'),0,0,10))
   start=number(c.get('start'),ends[layer],0,86400)
   rows.append((c,start,start+d,layer));ends[layer]=max(ends[layer],start+d)
@@ -347,23 +348,27 @@ def visible_clips(clips,fps=None):
  return windows
 
 def render(job,project,preview=False,_token=None,_size=None):
+ audio_clips=validate_audio(project)
  clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
+ video_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(clips)])
+ if audio_extent(audio_clips)>video_end:clips=[*clips,{'gap':audio_extent(audio_clips)-video_end,'start':video_end}]
  raw_clips=copy.deepcopy(clips)
  clips=visible_clips(clips,fps)
  crf={'Preview':28,'Standard':21,'High':18,'Maximum':15}.get(exp.get('quality'),21)
  token=_token or job['id']
- work=ROOT/'cache'/('render-'+token);work.mkdir();outputs=[];total=sum(c['_window'][1] for c in clips);done=0;lower_path=None
+ work=ROOT/'cache'/('render-'+token);work.mkdir();outputs=[];total=sum(c['_window'][1] for c in clips);done=0;lower_paths={}
  try:
-  if any(c.get('layer')==1 and (c.get('fadeIn') or c.get('fadeOut') or c.get('opacity',1)<1) for c in raw_clips):
-   ends=[0.,0.];lower=[]
+  for target in (1,2):
+   if not any(c.get('layer')==target and (c.get('fadeIn') or c.get('fadeOut') or c.get('opacity',1)<1) for c in raw_clips):continue
+   ends=[0.,0.,0.];lower=[]
    for c in raw_clips:
-    layer=1 if c.get('layer')==1 else 0;d=timing(c)[0][-1][1]+c.get('hold',0);start=c.get('start',ends[layer]);ends[layer]=max(ends[layer],start+d)
-    if layer==0:lower.append({**c,'start':start,'layer':0})
+    layer=int(number(c.get('layer'),0,0,2));d=timing(c)[0][-1][1]+c.get('hold',0);start=c.get('start',ends[layer]);ends[layer]=max(ends[layer],start+d)
+    if layer<target:lower.append({**c,'start':start,'layer':layer})
    lower.append({'gap':.001,'start':max(0,total-.001)})
-   base={**project,'clips':lower,'texts':[],'effects':[],'bgm':{}}
-   lr=render(job,base,preview,_token=token+'-lower',_size=(w,h));lower_path=ROOT/('cache' if preview else 'exports')/lr['file']
+   base={**project,'clips':lower,'texts':[],'effects':[],'bgm':{},'audioClips':[]}
+   lr=render(job,base,preview,_token=token+'-lower'+str(target),_size=(w,h));lower_paths[target]=ROOT/('cache' if preview else 'exports')/lr['file']
   for idx,c in enumerate(clips):
    if c.get('gap'):
     d=c['_window'][1];part=work/f'clip-{idx:04d}.mp4';outputs.append(part);job['operation']='空白区間を生成中'
@@ -394,7 +399,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    if c.get('interpolation')=='blend':vf.append(f'framerate=fps={fps}:interp_start=0:interp_end=255:scene=100')
    else:vf.append(f'fps={fps}')
    vf+=['fps='+str(fps),'tpad=stop_mode=clone:stop=-1',f'trim=duration={duration+hold}','scale=out_color_matrix=bt709:out_range=tv','format=yuv420p','setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709']
-   graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=number(audio.get('volume'),1,0,2) if not audio.get('mute') else 0
+   graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=number(audio.get('volume'),1,0,2) if not audio.get('mute') and not any(t.get('solo') for t in project.get('audioTracks',[])) else 0
    input_args=['-loop','1','-framerate',fps,'-t',source_duration,'-i',source] if m.get('kind')=='image' else ['-ss',seek,'-t',source_duration,'-i',source]
    if m['audio'] and not c.get('freezeDuration') and len(pieces)>1:
     # Render ramp audio pieces sequentially to disk. No full-length asplit queues in RAM.
@@ -421,8 +426,8 @@ def render(job,project,preview=False,_token=None,_size=None):
     ai=f'(T+{offset})/{fi}' if fi else '1';ao=f'({duration+hold}-T-{offset})/{fo}' if fo else '1'
     alpha=f'{opacity}*max(0,min(1,min({ai},{ao})))'
     graph[0]=graph[0].replace('[v]','[top]')
-    if c.get('layer')==1 and lower_path:
-     index=sum(1 for a in input_args if a=='-i');input_args+=['-ss',c['_at'],'-i',str(lower_path)]
+    if c.get('layer') in lower_paths:
+     index=sum(1 for a in input_args if a=='-i');input_args+=['-ss',c['_at'],'-i',str(lower_paths[c.get('layer')])]
      graph.append(f'[{index}:v]setpts=PTS-STARTPTS[lower]')
     else:graph.append(f'color=c=black:s={w}x{h}:r={fps}:d={window_duration}[lower]')
     graph.append(f"[lower][top]blend=all_expr='A*(1-({alpha}))+B*({alpha})':shortest=1[v]")
@@ -461,14 +466,24 @@ def render(job,project,preview=False,_token=None,_size=None):
   if bg:
    args+=['-stream_loop','-1','-i',bg['path']];vol=number(bgm.get('volume'),.3,0,2);fi=number(bgm.get('fadeIn'),0,0,total/2);fo=number(bgm.get('fadeOut'),0,0,total/2)
    graph=[f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]','[0:a][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]'];args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
+  independent=render_tracks(job,project,audio_clips,work,total)
+  if independent:
+   # Rebuild a single final mix with the visible video audio and independent lanes.
+   args=['-i',joined];graph=[];labels=['[0:a]'];index=1
+   if bg:
+    args+=['-stream_loop','-1','-i',bg['path']]
+    graph.append(f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]');labels.append('[bg]');index+=1
+   for path in independent:args+=['-i',path];labels.append(f'[{index}:a]');index+=1
+   graph.append(''.join(labels)+f'amix=inputs={len(labels)}:duration=first:normalize=0,alimiter=limit=0.95:latency=1[a]')
+   args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
   if final_vf:args+=['-vf',','.join(final_vf),'-c:v','libx264','-preset','fast','-threads','2','-crf',crf]
   else:args+=['-c:v','copy']
-  args+=['-c:a','aac' if bg else 'copy','-t',total,'-movflags','+faststart',out]
+  args+=['-c:a','aac' if bg or independent else 'copy','-t',total,'-movflags','+faststart',out]
   job['operation']='MP4を仕上げ中';run(job,args,total,.89,.09,verify_decode=True)
   return {'file':out.name,'url':('/cache/' if preview else '/exports/')+out.name,'duration':total,'width':w,'height':h,'fps':fps,'preview':preview,'verified':True,'recoveredOutputs':job.get('recoveredOutputs',0)}
  finally:
   shutil.rmtree(work,ignore_errors=True)
-  if lower_path:lower_path.unlink(missing_ok=True)
+  for lower_path in lower_paths.values():lower_path.unlink(missing_ok=True)
 
 def analyze(job,id,intent='HIGH FASHION'):
  m=MEDIA[id];src=ROOT/'cache'/m['proxy'] if m.get('proxy') else pathlib.Path(m['path']);fps=min(4,18000/max(m['duration'],1));w=h=64;n=w*h

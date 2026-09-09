@@ -1,3 +1,4 @@
+import {audioWindows,trackGain} from './audio-timeline.js';
 import {Input,ALL_FORMATS,BlobSource,CanvasSink,AudioSampleSink,VideoSampleSink,Output,Mp4OutputFormat,StreamTarget,CanvasSource,AudioSampleSource,AudioSample,Quality,canEncodeVideo,canEncodeAudio} from './vendor/mediabunny.mjs';
 import {clipAlpha,effectAlpha,textPose} from './creative.js';
 import {imageBitmap} from './image-media.js';
@@ -17,9 +18,10 @@ export async function audioRange(track,start,end){
 }
 export async function mixAudio(rows,resources,p,start,end){
  const rate=48000,n=Math.round((end-start)*rate),data=new Float32Array(n*2);if(!n)return null;
- for(const row of rows){const c=row.clip;if(c.gap||c.freezeDuration||c.audio.mute||!c.audio.volume)continue;const track=resources.get(c.media).audio;if(!track)continue;const a=Math.max(start,row.start),b=Math.min(end,row.end,row.start+timing(c).nodes.at(-1)[1]-(row.offset||0));if(b<=a)continue;
- const lo=Math.max(0,Math.round((a-start)*rate)),hi=Math.min(n,Math.round((b-start)*rate));const from=sourceTime(row,a),to=sourceTime(row,b);const chunk=await audioRange(track,from,to+.002);
- mixWindow(data,lo,hi-lo,chunk.planes,i=>(sourceTime(row,start+(lo+i)/rate)-from)*chunk.rate,i=>gainAt(start+(lo+i)/rate-row.start+(row.offset||0),row.originalDuration??row.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut));
+ for(const row of [...rows,...audioWindows(p)]){const c=row.clip;if(c.kind!=='audio'&&(p.audioTracks||[]).some(t=>t.solo))continue;if(c.gap||c.freezeDuration||c.audio.mute||!c.audio.volume)continue;const track=resources.get(c.media).audio;if(!track)continue;const a=Math.max(start,row.start),b=Math.min(end,row.end,row.start+timing(c).nodes.at(-1)[1]-(row.offset||0));if(b<=a)continue;
+ const lo=Math.max(0,Math.round((a-start)*rate)),hi=Math.min(n,Math.round((b-start)*rate));const from=sourceTime(row,a),to=sourceTime(row,b),res=resources.get(c.media),trackVolume=c.kind==='audio'?trackGain(p,row.layer):1;if(!trackVolume)continue;
+ const ranges=[];if(!c.loop)ranges.push([from,to+.002]);else{const d=res.duration,span=to-from,f=from%d;if(span>=d)ranges.push([0,d]);else{ranges.push([f,Math.min(d,f+span+.002)]);if(f+span>d)ranges.push([0,f+span-d+.002])}}
+ for(const [begin,stop] of ranges){const chunk=await audioRange(track,begin,stop);mixWindow(data,lo,hi-lo,chunk.planes,i=>{const s=sourceTime(row,start+(lo+i)/rate),pos=c.loop?s%res.duration:s;return pos>=begin&&pos<stop?(pos-begin)*chunk.rate:-1},i=>trackVolume*gainAt(start+(lo+i)/rate-row.start+(row.offset||0),row.originalDuration??row.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut));}
  }
  const bg=resources.get(p.bgm.media);if(bg?.audio&&p.bgm.volume){let cursor=start;while(cursor<end-1e-8){check();const local=cursor%bg.duration,stop=Math.min(end,cursor+bg.duration-local);if(stop<=cursor)break;const chunk=await audioRange(bg.audio,local,local+stop-cursor+.002),lo=Math.max(0,Math.round((cursor-start)*rate)),hi=Math.min(n,Math.round((stop-start)*rate));mixWindow(data,lo,hi-lo,chunk.planes,i=>i*chunk.rate/rate,i=>gainAt(start+(lo+i)/rate,rows.at(-1).end,p.bgm.volume,p.bgm.fadeIn,p.bgm.fadeOut));cursor=stop;}}
  for(let i=0;i<data.length;i++)data[i]=Math.max(-1,Math.min(1,data[i]));return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
@@ -53,24 +55,24 @@ async function frameReader(row,res,cfg,start=row.start){
  }catch(e){still?.close();await iterator?.return?.();throw e}
 }
 async function render(p,files,preview,outputPath){
- const cfg=outputSettings(p,preview),rows=visibleSequence(p),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null];let painter;
+ const cfg=outputSettings(p,preview),rows=visibleSequence(p),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');
  if(!await canEncodeVideo('avc',{width:cfg.width,height:cfg.height,bitrate:cfg.bitrate})||!await canEncodeAudio('aac',{sampleRate:48000,numberOfChannels:2}))throw Error('選択したH.264/AAC設定に端末が対応していません。1080p・30fpsをお試しください。');
- const needed=new Set(p.clips.filter(c=>!c.gap).map(c=>c.media));if(p.bgm.media)needed.add(p.bgm.media);
- for(const id of needed){check();const file=files.find(x=>x.id===id)?.file;if(!file)throw Error('元素材を再リンクしてください。');const metadata=p.media.find(m=>m.id===id);if(metadata?.kind==='image'){resources.set(id,{imageFile:file,metadata,audio:null,duration:5});continue}const input=open(file);activeInputs.push(input);const video=await input.getPrimaryVideoTrack(),audio=await input.getPrimaryAudioTrack();if(video){if(!await video.canDecode())throw Error(file.name+' の映像を端末でデコードできません。');const color=await video.getColorSpace();if(await video.hasHighDynamicRange()||['smpte2084','arib-std-b67'].includes(color.transfer))throw Error(file.name+' はHDRです。端末版の正確なトーンマッピングは未対応のため停止しました。SDR素材、またはMac版をご利用ください。');}
- const needsAudio=id===p.bgm.media||rows.some(r=>r.clip.media===id&&!r.clip.audio?.mute&&r.clip.audio?.volume);if(audio&&needsAudio&&audio.numberOfChannels>2)throw Error('端末版の音声はモノラル・ステレオのみ対応しています。');if(audio&&needsAudio&&!await audio.canDecode())throw Error(file.name+' の音声をデコードできません。');resources.set(id,{input,video,audio:needsAudio?audio:null,duration:await input.computeDuration()});}
+ const needed=new Set([...p.clips,...p.audioClips||[]].filter(c=>!c.gap).map(c=>c.media));if(p.bgm.media)needed.add(p.bgm.media);
+ for(const id of needed){check();const file=files.find(x=>x.id===id)?.file;if(!file)throw Error('元素材を再リンクしてください。');const metadata=p.media.find(m=>m.id===id);if(metadata?.kind==='image'){resources.set(id,{imageFile:file,metadata,audio:null,duration:5});continue}const input=open(file);activeInputs.push(input);const video=await input.getPrimaryVideoTrack(),audio=await input.getPrimaryAudioTrack();if(video&&p.clips.some(c=>c.media===id)){if(!await video.canDecode())throw Error(file.name+' の映像を端末でデコードできません。');const color=await video.getColorSpace();if(await video.hasHighDynamicRange()||['smpte2084','arib-std-b67'].includes(color.transfer))throw Error(file.name+' はHDRです。端末版の正確なトーンマッピングは未対応のため停止しました。SDR素材、またはMac版をご利用ください。');}
+ const needsAudio=(p.audioClips||[]).some(c=>c.media===id)||id===p.bgm.media||rows.some(r=>r.clip.media===id&&!r.clip.audio?.mute&&r.clip.audio?.volume);if(audio&&needsAudio&&audio.numberOfChannels>2)throw Error('端末版の音声はモノラル・ステレオのみ対応しています。');if(audio&&needsAudio&&!await audio.canDecode())throw Error(file.name+' の音声をデコードできません。');resources.set(id,{input,video,audio:needsAudio?audio:null,duration:await input.computeDuration()});}
  check();const estimate=await navigator.storage.estimate();const expectedBytes=(cfg.bitrate+192000)*cfg.duration/8;if(estimate.quota&&estimate.quota-estimate.usage<expectedBytes*1.2)throw Error('書き出し用の空き容量が不足しています。画質か解像度を下げてください。');root=await navigator.storage.getDirectory();root=await root.getDirectoryHandle('pve-renders',{create:true});path=outputPath;fileHandle=await root.getFileHandle(path,{create:true});handle=await fileHandle.createSyncAccessHandle();
  const stream=new WritableStream({write({data,position}){check();if(handle.write(data,{at:position})!==data.byteLength)throw Error('端末の空き容量が不足しています。');}});
  output=new Output({format:new Mp4OutputFormat({fastStart:'reserve'}),target:new StreamTarget(stream,{chunked:true,chunkSize:1024*1024})});
  const picture=canvas(cfg.width,cfg.height),processed=canvas(cfg.width,cfg.height),ctx=picture.getContext('2d',{alpha:false});painter=renderer(processed,{width:cfg.width,height:cfg.height,preserve:true});if(!painter)throw Error('映像処理用GPUを利用できません。');
  const videoSource=new CanvasSource(picture,{codec:'avc',quality:new Quality({bitrate:cfg.bitrate}),keyFrameInterval:2});const audioSource=new AudioSampleSource({codec:'aac',quality:new Quality({bitrate:192000})});output.addVideoTrack(videoSource,{frameRate:cfg.fps,maximumPacketCount:cfg.frames+8});output.addAudioTrack(audioSource,{maximumPacketCount:Math.ceil(cfg.duration*48000/1024)+100});await output.start();let frameIndex=0,audioTime=0;
- const layerRows=[0,1].map(layer=>visibleSequence({...p,clips:sequence(p).filter(r=>r.layer===layer).map(r=>({...r.clip,start:r.start}))})),indices=[0,0];
+ const layerRows=[0,1,2].map(layer=>visibleSequence({...p,clips:sequence(p).filter(r=>r.layer===layer).map(r=>({...r.clip,start:r.start}))})),indices=[0,0,0];
  while(frameIndex<cfg.frames){
  check();const t=frameIndex/cfg.fps;ctx.globalAlpha=1;ctx.fillStyle='#000';ctx.fillRect(0,0,cfg.width,cfg.height);
  const active=layerRows.map((list,k)=>{while(indices[k]<list.length&&list[indices[k]].end<=t+1e-8)indices[k]++;const r=list[indices[k]];return r&&r.start<=t&&!r.clip.gap?r:null});
- for(let k=0;k<2;k++){
- const row=active[k],alpha=clipAlpha(row,t),occluded=k===0&&clipAlpha(active[1],t)>=1;
+ for(let k=0;k<3;k++){
+ const row=active[k],alpha=clipAlpha(row,t),occluded=active.some((r,j)=>j>k&&clipAlpha(r,t)>=1);
  if(!row||occluded){if(sessions[k]){await sessions[k].reader.close();sessions[k]=null}continue}
  if(sessions[k]?.row!==row){if(sessions[k])await sessions[k].reader.close();sessions[k]={row,reader:await frameReader(row,resources.get(row.clip.media),cfg,t)}}
  const frame=await sessions[k].reader.frame(t);painter.draw(frame,row.clip,`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;ctx.drawImage(processed,0,0);ctx.globalAlpha=1;

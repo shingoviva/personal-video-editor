@@ -6,7 +6,7 @@ import {sourceTime,held} from '../dist/mobile-model.js';
 import {bindStretch} from '../dist/stretch-gesture.js';
 import {lookPresets,gradeRGB} from '../dist/look.js';
 const m={id:'movie',duration:10,kind:'video'},p=project();p.media=[m];p.clips=[{...clip(m),start:0,layer:0}];
-const still=frozenClip(p,p.clips[0].id,3,2);assert.equal(still.freezeAt,3);assert.equal(still.layer,1);assert.equal(still.audio.mute,true);
+const still=frozenClip(p,p.clips[0].id,3,2);assert.equal(still.freezeAt,3);assert.equal(still.layer,2);assert.equal(still.audio.mute,true);
 let row=sequence(p).find(r=>r.clip===still);assert.equal(row.end,5);assert.equal(sourceTime(row,4.8),3);assert(held(row,3));assert.equal(splitClip(still,3.01),null);
 still.freezeDuration=4;assert.equal(sequence(p).find(r=>r.clip===still).end,7);
 assert.equal(sanitize(JSON.parse(JSON.stringify(p))).clips[1].freezeDuration,4);

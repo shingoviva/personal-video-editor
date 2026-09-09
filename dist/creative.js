@@ -11,7 +11,7 @@ export function frozenClip(p,id,t,seconds=1){
  const row=sequence(p).find(r=>r.clip.id===id);if(!row||row.clip.gap)return null;
  const c=row.clip,source=c.kind==='image'?0:c.freezeAt??Math.min(c.out-.001,c.in+sourceOffset(clamp(t-row.start,0,row.duration),c));
  const frozen={...structuredClone(c),freezeAt:source,freezeDuration:clamp(seconds,1/30,60),in:source,out:Math.max(source+.001,Math.min(c.out,source+1/30)),hold:0,speed:1,endSpeed:1,curve:'constant',stabilization:'OFF',fadeIn:0,fadeOut:0};
- delete frozen.timingBase;frozen.audio={...c.audio,mute:true};return pasteClip(p,frozen,Math.max(0,t),1);
+ delete frozen.timingBase;frozen.audio={...c.audio,mute:true};return pasteClip(p,frozen,Math.max(0,t),2);
 }
 export function stretchClip(c,original,ratio){
  const scale=clamp(ratio,.0025,400);

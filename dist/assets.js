@@ -7,7 +7,7 @@ export function fileKind(file){
  if(file.type?.startsWith('audio/')||['mp3','wav','m4a','aac','aiff','aif','flac','ogg','opus'].includes(ext))return'audio';
  return'video';
 }
-export const usage=(p,id)=>p.clips.filter(c=>!c.gap&&c.media===id).length+(p.bgm?.media===id?1:0);
+export const usage=(p,id)=>[...p.clips,...p.audioClips||[]].filter(c=>!c.gap&&c.media===id).length+(p.bgm?.media===id?1:0);
 export function filterAssets(p,{kind='all',query='',sort='recent'}={}){
  const q=query.trim().toLocaleLowerCase();
  const result=p.media.filter(m=>(kind==='all'||mediaKind(m)===kind)&&(!q||(assetName(m)+' '+m.name).toLocaleLowerCase().includes(q)));

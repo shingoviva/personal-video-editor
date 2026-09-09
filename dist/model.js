@@ -2,7 +2,7 @@ export const uid=()=>globalThis.crypto?.randomUUID?.()||Date.now().toString(36)+
 export const clamp=(x,a,b)=>Math.max(a,Math.min(b,Number(x)||0));
 export const colors=()=>Object.fromEntries(['exposure','contrast','highlights','shadows','whites','blacks','temperature','tint','saturation','vibrance'].map(k=>[k,0]));
 export function project(){return{version:1,id:uid(),name:'Untitled film',media:[],clips:[],aspect:'Original',intent:'HIGH FASHION',texts:[],bgm:{volume:.3,fadeIn:0,fadeOut:0},analysis:[],export:{preset:'INSTAGRAM REELS',resolution:'1080p',fps:'30',quality:'High'}}}
-export function clip(m){return{id:uid(),media:m.id,in:0,out:m.duration,speed:1,endSpeed:1,curve:'constant',scale:1,x:.5,y:.5,stabilization:'OFF',interpolation:'duplicate',hold:0,color:colors(),audio:{volume:1,mute:false,fadeIn:0,fadeOut:0}}}
+export function clip(m){return{id:uid(),media:m.id,kind:m.kind||'video',in:0,out:m.kind==='image'?5:m.duration,speed:1,endSpeed:1,curve:'constant',scale:1,x:.5,y:.5,stabilization:'OFF',interpolation:'duplicate',hold:0,color:colors(),audio:{volume:1,mute:false,fadeIn:0,fadeOut:0}}}
 export function speedAt(t,c){let a=c.speed??1,b=c.endSpeed??a;if(c.curve==='constant')return a;if(c.curve==='ease-in')t*=t;else if(c.curve==='ease-out')t=1-(1-t)**2;else if(c.curve==='ease-in-out')t=t*t*(3-2*t);return a+(b-a)*t}
 const timeCache=new WeakMap();
 export function timing(c){const key=[c.in,c.out,c.speed,c.endSpeed,c.curve,c.hold,c.gap,JSON.stringify(c.timingBase)].join("|");const old=timeCache.get(c);if(old?.key===key)return old.value;const value=computeTiming(c);timeCache.set(c,{key,value});return value}

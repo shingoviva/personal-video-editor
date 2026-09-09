@@ -23,12 +23,12 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.3.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.4.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
  if r.returncode:raise ValueError(r.stderr[-1000:])
- d=json.loads(r.stdout);v=next((s for s in d['streams'] if s['codec_type']=='video'),None);a=next((s for s in d['streams'] if s['codec_type']=='audio'),None)
+ d=json.loads(r.stdout);v=next((s for s in d['streams'] if s['codec_type']=='video' and not s.get('disposition',{}).get('attached_pic')),None);a=next((s for s in d['streams'] if s['codec_type']=='audio'),None)
  if not v and not a:raise ValueError('映像・音声ストリームが見つかりません。')
  v=v or {}; fmt=d.get('format',{});rotation=0
  for s in v.get('side_data_list',[]):rotation=s.get('rotation',rotation)
@@ -36,6 +36,14 @@ def inspect(path,id,name):
  if abs(rotation)%180==90:w,h=h,w
  trc=v.get('color_transfer','unknown');dolby=next((s for s in v.get('side_data_list',[]) if 'DOVI' in s.get('side_data_type','')),None)
  m={'id':id,'name':name,'path':str(path),'width':w,'height':h,'duration':number(fmt.get('duration',v.get('duration')),0,0), 'fps':ratio(v.get('avg_frame_rate','30/1')) or 30,'rateMode':'Checking' if w else '—','codec':v.get('codec_name',a.get('codec_name') if a else 'unknown'),'container':fmt.get('format_name',''),'size':path.stat().st_size,'audio':bool(a),'hdr':trc in ('smpte2084','arib-std-b67') or bool(dolby),'transfer':trc,'primaries':v.get('color_primaries','unknown'),'matrix':v.get('color_space','unknown'),'dolby':dolby,'rotation':rotation,'proxy':None}
+ kind='image' if pathlib.Path(name).suffix.lower() in ('.jpg','.jpeg','.png','.webp') else 'video' if w else 'audio'
+ m['kind']=kind
+ if kind=='image':
+  if not w or w*h>80000000:raise ValueError('静止画は8,000万画素以下にしてください。')
+  m.update(duration=5,fps=0,rateMode='STILL',audio=False)
+  thumb=ROOT/'cache'/(id+'-still.jpg')
+  result=subprocess.run(BASE+['-i',str(path),'-frames:v','1','-vf',"scale=320:320:force_original_aspect_ratio=decrease",str(thumb)],capture_output=True,timeout=30)
+  if result.returncode==0:m['thumb']=thumb.name
  save_media(m);return m
 
 def save_media(m):
@@ -278,7 +286,7 @@ def validate(project):
   if c.get('media') not in MEDIA:raise ValueError('元素材を再リンクしてください。')
   m=MEDIA[c['media']]
   if not m['width']:raise ValueError('動画素材を選択してください。')
-  c['in']=number(c.get('in'),0,0,m['duration']);c['out']=number(c.get('out'),m['duration'],0,m['duration'])
+  c['in']=number(c.get('in'),0,0,3600 if m.get('kind')=='image' else m['duration']);c['out']=number(c.get('out'),m['duration'],0,3600 if m.get('kind')=='image' else m['duration'])
   if c['out']-c['in']<.001:raise ValueError('IN / OUT の範囲が無効です。')
  return clips
 
@@ -331,7 +339,7 @@ def visible_clips(clips,fps=None):
  return windows
 
 def render(job,project,preview=False):
- clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),first['fps'] if exp.get('fps')=='Source' else 30,1,240)
+ clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
  clips=visible_clips(clips,fps)
@@ -344,7 +352,7 @@ def render(job,project,preview=False):
     run(job,['-f','lavfi','-i',f'color=c=black:s={w}x{h}:r={fps}','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t',d,'-c:v','libx264','-preset','veryfast','-threads','2','-crf',crf,'-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-video_track_timescale','90000',part],d,done/max(total,.001)*.85,d/max(total,.001)*.85)
     done+=d;continue
    check(job);m=MEDIA[c['media']];nodes,pieces=timing(c);duration=nodes[-1][1];hold=number(c.get('hold'),0,0,10);vf=tone(m);source=m['path'];source_duration=c['out']-c['in'];seek=c['in'];job['operation']=f'クリップ {idx+1}/{len(clips)} を処理中'
-   stabil=c.get('stabilization','OFF')
+   stabil='OFF' if m.get('kind')=='image' else c.get('stabilization','OFF')
    if stabil!='OFF':
     if not capabilities()['stabilization']:raise ValueError('このFFmpegにはvidstabがありません。libvidstab対応版が必要です。')
     # Stabilize before time remapping. Each selected source segment is streamed to disk, not RAM.
@@ -354,6 +362,7 @@ def render(job,project,preview=False):
     job['operation']='手ぶれを補正中'
     run(job,['-ss',seek,'-i',source,'-t',source_duration,'-vf',','.join(vf+[f'vidstabtransform=input={trf}:smoothing={smooth}:optzoom=1:crop=black','format=yuv420p']),'-c:v','libx264','-preset','veryfast','-crf','16','-threads','2','-c:a','aac',pre],source_duration,done/max(total,.001)*.85,.03,cwd=work)
     source=str(pre);seek=0;vf=[]
+   if m.get('kind')=='image':vf+=['format=rgba','premultiply=inplace=1','format=rgb24']
    scale=number(c.get('scale'),1,1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1);ar=w/h
    vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/{scale}/2)*2':h='trunc(min(ih,iw/{ar})/{scale}/2)*2':x='(iw-ow)*{x}':y='(ih-oh)*{y}'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
    vf+=color_filters(c.get('color',{}));vf+=['settb=AVTB','setpts=PTS-STARTPTS']
@@ -365,7 +374,7 @@ def render(job,project,preview=False):
    else:vf.append(f'fps={fps}')
    vf+=['fps='+str(fps),'tpad=stop_mode=clone:stop=-1',f'trim=duration={duration+hold}','format=yuv420p']
    graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=number(audio.get('volume'),1,0,2) if not audio.get('mute') else 0
-   input_args=['-ss',seek,'-t',source_duration,'-i',source]
+   input_args=['-loop','1','-framerate',fps,'-t',source_duration,'-i',source] if m.get('kind')=='image' else ['-ss',seek,'-t',source_duration,'-i',source]
    if m['audio'] and len(pieces)>1:
     # Render ramp audio pieces sequentially to disk. No full-length asplit queues in RAM.
     audio_parts=[]

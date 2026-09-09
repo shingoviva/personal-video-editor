@@ -76,7 +76,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
    if p=='/api/upload':
     if n<=0:raise ValueError('空のファイルです。')
     id=uuid.uuid4().hex;name=urllib.parse.unquote(self.headers.get('X-Filename','media.mov'));name=pathlib.Path(name).name;suffix=pathlib.Path(name).suffix.lower()
-    if suffix not in ('.mov','.mp4','.m4v','.webm','.mkv','.mp3','.wav','.m4a','.aac','.aiff','.flac'):raise ValueError('対応する動画・音声ファイルを選んでください。')
+    if suffix not in ('.mov','.mp4','.m4v','.webm','.mkv','.mp3','.wav','.m4a','.aac','.aiff','.aif','.flac','.ogg','.opus','.jpg','.jpeg','.png','.webp'):raise ValueError('動画・音声、またはJPEG・PNG・WebPの静止画を選んでください。')
     target=core.ROOT/'media'/(id+suffix);part=target.with_suffix('.upload')
     try:
      with part.open('wb') as f:

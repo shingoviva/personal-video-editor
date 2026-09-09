@@ -1,4 +1,5 @@
 import {timing,sourceOffset,clamp,trimClip} from './model.js';
+import {sourceLimit} from './assets.js';
 
 // A pointer gesture is a single history transaction, including touch/pen.
 // Only geometry changes during dragging; no thumbnail DOM is rebuilt.
@@ -28,10 +29,10 @@ export function bindTimeline({root,rows,duration,select,begin,finish,cancel,prev
      const d=timing(origin).nodes.at(-1)[1],sourceAt=t=>t<0?t*origin.speed:t>d?origin.out-origin.in+(t-d)*(origin.curve==='constant'?origin.speed:origin.endSpeed):sourceOffset(t,origin);
      if(edge==='in'){
       const desired=snapped(row.start+delta)-row.start;
-      trimClip(c,'in',origin.in+sourceAt(desired),media(c).duration);
+      trimClip(c,'in',origin.in+sourceAt(desired),sourceLimit(media(c)));
       c.start=Math.max(0,row.end-timing(c).duration);
       if(timing(c).duration>row.end){Object.assign(c,origin);c.start=row.start}
-     }else trimClip(c,'out',origin.in+sourceAt(snapped(row.end+delta)-row.start-(origin.hold||0)),media(c).duration);
+     }else trimClip(c,'out',origin.in+sourceAt(snapped(row.end+delta)-row.start-(origin.hold||0)),sourceLimit(media(c)));
     }
     el.style.left=c.start/Math.max(duration,.001)*100+'%';
     el.style.width=timing(c).duration/Math.max(duration,.001)*100+'%';

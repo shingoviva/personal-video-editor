@@ -1,6 +1,6 @@
 import {Input,ALL_FORMATS,BlobSource,CanvasSink,AudioSampleSink,VideoSampleSink,Output,Mp4OutputFormat,StreamTarget,CanvasSource,AudioSampleSource,AudioSample,Quality,canEncodeVideo,canEncodeAudio} from './vendor/mediabunny.mjs';
 import {renderer} from './preview.js';
-import {sequence,timing,sourceOffset} from './model.js';
+import {sequence,visibleSequence,timing,sourceOffset} from './model.js';
 import {outputSettings,sourceTime,gainAt,held,mixWindow} from './mobile-model.js';
 import {translation,smoothPath,correctionAt} from './mobile-stabilize.js';
 let cancelled=false;
@@ -15,9 +15,9 @@ export async function audioRange(track,start,end){
 }
 export async function mixAudio(rows,resources,p,start,end){
  const rate=48000,n=Math.round((end-start)*rate),data=new Float32Array(n*2);if(!n)return null;
- for(const row of rows){const c=row.clip;if(c.gap||c.audio.mute||!c.audio.volume)continue;const track=resources.get(c.media).audio;if(!track)continue;const a=Math.max(start,row.start),b=Math.min(end,row.end,row.start+timing(c).nodes.at(-1)[1]);if(b<=a)continue;
+ for(const row of rows){const c=row.clip;if(c.gap||c.audio.mute||!c.audio.volume)continue;const track=resources.get(c.media).audio;if(!track)continue;const a=Math.max(start,row.start),b=Math.min(end,row.end,row.start+timing(c).nodes.at(-1)[1]-(row.offset||0));if(b<=a)continue;
  const lo=Math.max(0,Math.round((a-start)*rate)),hi=Math.min(n,Math.round((b-start)*rate));const from=sourceTime(row,a),to=sourceTime(row,b);const chunk=await audioRange(track,from,to+.002);
- mixWindow(data,lo,hi-lo,chunk.planes,i=>(sourceTime(row,start+(lo+i)/rate)-from)*chunk.rate,i=>gainAt(start+(lo+i)/rate-row.start,row.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut));
+ mixWindow(data,lo,hi-lo,chunk.planes,i=>(sourceTime(row,start+(lo+i)/rate)-from)*chunk.rate,i=>gainAt(start+(lo+i)/rate-row.start+(row.offset||0),row.originalDuration??row.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut));
  }
  const bg=resources.get(p.bgm.media);if(bg?.audio&&p.bgm.volume){let cursor=start;while(cursor<end-1e-8){check();const local=cursor%bg.duration,stop=Math.min(end,cursor+bg.duration-local);if(stop<=cursor)break;const chunk=await audioRange(bg.audio,local,local+stop-cursor+.002),lo=Math.max(0,Math.round((cursor-start)*rate)),hi=Math.min(n,Math.round((stop-start)*rate));mixWindow(data,lo,hi-lo,chunk.planes,i=>i*chunk.rate/rate,i=>gainAt(start+(lo+i)/rate,rows.at(-1).end,p.bgm.volume,p.bgm.fadeIn,p.bgm.fadeOut));cursor=stop;}}
  for(let i=0;i<data.length;i++)data[i]=Math.max(-1,Math.min(1,data[i]));return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
@@ -29,7 +29,7 @@ async function stabilize(track,c,onProgress){
 }
 function drawText(ctx,p,t,w,h){for(const text of p.texts){if(t<text.start||t>text.end)continue;const fade=text.fade?Math.max(0,Math.min(1,(t-text.start)/text.fade,(text.end-t)/text.fade)):1;ctx.save();ctx.fillStyle='#fff';ctx.globalAlpha=text.opacity*fade;const size=text.size*h/1080;ctx.font=`${size}px ${text.font==='Serif'?'Georgia':text.font==='Mono'?'monospace':'Arial'}`;ctx.textAlign=text.align||'center';ctx.textBaseline='middle';const lines=text.text.split('\n');lines.forEach((line,i)=>ctx.fillText(line,text.x*w,text.y*h+(i-(lines.length-1)/2)*size*1.1,w*.96));ctx.restore();}}
 async function render(p,files,preview,outputPath){
- const cfg=outputSettings(p,preview),rows=sequence(p),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[];let painter;
+ const cfg=outputSettings(p,preview),rows=visibleSequence(p),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');
  if(!await canEncodeVideo('avc',{width:cfg.width,height:cfg.height,bitrate:cfg.bitrate})||!await canEncodeAudio('aac',{sampleRate:48000,numberOfChannels:2}))throw Error('選択したH.264/AAC設定に端末が対応していません。1080p・30fpsをお試しください。');
@@ -45,7 +45,7 @@ async function render(p,files,preview,outputPath){
  try{
  if(!c.gap){if(!res?.video)throw Error('映像トラックがありません。');if(c.stabilization!=='OFF'){progress('手ぶれの動きを解析中',frameIndex/cfg.frames*.9);pathData=await stabilize(res.video,c,value=>progress('手ぶれの動きを解析中 '+Math.round(value*100)+'%',frameIndex/cfg.frames*.9));postMessage({type:'note',text:'端末版の平行移動補正・クロップ '+(pathData.crop*100).toFixed(1)+'%'});}
  const aspect=res.video.displayWidth/res.video.displayHeight;const scale=Math.min(1,Math.max(cfg.width/res.video.displayWidth,cfg.height/res.video.displayHeight)*(c.scale||1)*(pathData?.scale||1));const sw=Math.max(2,Math.round(res.video.displayWidth*scale)),sh=Math.max(2,Math.round(res.video.displayHeight*scale));
- sink=new CanvasSink(res.video,{width:sw,height:sh,fit:'fill',poolSize:3});current=await sink.getCanvas(c.in);iterator=sink.canvases(Math.max(0,c.in-.1),c.out)[Symbol.asyncIterator]();next=await iterator.next();blendCanvas=canvas(sw,sh);blendCtx=blendCanvas.getContext('2d',{alpha:false});if(pathData){stableCanvas=canvas(sw,sh);stableCtx=stableCanvas.getContext('2d',{alpha:false})}}
+ sink=new CanvasSink(res.video,{width:sw,height:sh,fit:'fill',poolSize:3});current=await sink.getCanvas(sourceTime(row,row.start));iterator=sink.canvases(Math.max(0,sourceTime(row,row.start)-.1),c.out)[Symbol.asyncIterator]();next=await iterator.next();blendCanvas=canvas(sw,sh);blendCtx=blendCanvas.getContext('2d',{alpha:false});if(pathData){stableCanvas=canvas(sw,sh);stableCtx=stableCanvas.getContext('2d',{alpha:false})}}
  while(frameIndex<cfg.frames&&frameIndex/cfg.fps<row.end-1e-8){check();const t=frameIndex/cfg.fps;ctx.fillStyle='#000';ctx.fillRect(0,0,cfg.width,cfg.height);
  if(!c.gap){const source=sourceTime(row,t);while(!next.done&&next.value.timestamp<=source+1e-8){current=next.value;next=await iterator.next()}if(!current)current=next.value;if(!current)throw Error('映像フレームを読み込めません。');blendCtx.globalAlpha=1;blendCtx.drawImage(current.canvas,0,0);if(c.interpolation==='blend'&&!next.done&&next.value.timestamp>current.timestamp){blendCtx.globalAlpha=Math.max(0,Math.min(1,(source-current.timestamp)/(next.value.timestamp-current.timestamp)));blendCtx.drawImage(next.value.canvas,0,0);blendCtx.globalAlpha=1;}
  if(pathData){const corr=correctionAt(pathData,source),w=stableCanvas.width,h=stableCanvas.height;stableCtx.save();stableCtx.fillStyle='#000';stableCtx.fillRect(0,0,w,h);stableCtx.translate(w/2+corr.x*w,h/2+corr.y*h);stableCtx.scale(pathData.scale,pathData.scale);stableCtx.drawImage(blendCanvas,-w/2,-h/2);stableCtx.restore();}painter.draw(stableCanvas||blendCanvas,c,p.aspect);ctx.drawImage(processed,0,0);}

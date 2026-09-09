@@ -14,8 +14,9 @@ with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=9) as archive:
             archive.write(path, 'Personal-Video-Editor/' + path.relative_to(root).as_posix())
 with ZipFile(output) as archive:
     assert archive.testzip() is None
+    assert 'Personal-Video-Editor/dist/timeline-gestures.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/media-state.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/mobile-render-worker.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/device-test.mp4' in archive.namelist()
-    assert b"'build':'1.1.0'" in archive.read('Personal-Video-Editor/engine/core.py')
+    assert b"'build':'1.3.0'" in archive.read('Personal-Video-Editor/engine/core.py')
 print(f'Mac bundle verified: {output.stat().st_size:,} bytes')

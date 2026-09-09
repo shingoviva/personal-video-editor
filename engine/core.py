@@ -23,7 +23,7 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.1.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.3.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
@@ -250,7 +250,14 @@ def curve_value(t,a,b,kind):
  return a+(b-a)*t
 
 def timing(c):
- 
+ if c.get('timingBase') and not c.get('gap'):
+  base={k:c['timingBase'].get(k) for k in ('in','out','speed','endSpeed','curve')}
+  nodes0,pieces0=timing(base);pieces=[];nodes=[(0,0)];elapsed=0
+  for a,b,s,*_ in [(-math.inf,0,pieces0[0][2])]+pieces0+[(nodes0[-1][0],math.inf,pieces0[-1][2])]:
+   x=max(c['in'],base['in']+a);y=min(c['out'],base['in']+b)
+   if y<=x:continue
+   d=(y-x)/s;pieces.append((x-c['in'],y-c['in'],s,d));elapsed+=d;nodes.append((y-c['in'],elapsed))
+  return nodes,pieces
  if c.get('gap'):
   d=number(c['gap'],1,.01,86400);return [(0,0),(d,d)],[(0,d,1,d)]
  d=c['out']-c['in'];a=number(c.get('speed'),1,.05,20);b=number(c.get('endSpeed'),a,.05,20);kind=c.get('curve','constant')
@@ -296,16 +303,44 @@ def color_filters(col):
  for k,bias in [('r',temp+tint/2),('g',-tint),('b',-temp+tint/2)]:rgb.append(f"{k}='255*{common}+{bias},0,1)'")
  return ['format=rgb24','lutrgb='+':'.join(rgb),f'eq=saturation={1+sat/100}',f'vibrance=intensity={vib/100}']
 
+def visible_clips(clips,fps=None):
+ """Absolute two-track visibility; upper/later clips replace image and source audio."""
+ ends=[0.,0.];rows=[]
+ for c in clips:
+  layer=1 if c.get('layer')==1 else 0
+  d=timing(c)[0][-1][1]+(0 if c.get('gap') else number(c.get('hold'),0,0,10))
+  start=number(c.get('start'),ends[layer],0,86400)
+  rows.append((c,start,start+d,layer));ends[layer]=max(ends[layer],start+d)
+ edges=sorted(set([0.]+[v for _,a,b,_ in rows for v in (a,b)]));windows=[]
+ for a,b in zip(edges,edges[1:]):
+  if b-a<1e-9:continue
+  active=[r for r in rows if not r[0].get('gap') and r[1]<=(a+b)/2<r[2]]
+  row=max(enumerate(active),key=lambda item:(item[1][3],item[0]))[1] if active else None
+  c,start,_,_=row if row else ({'gap':b-a},a,b,0)
+  if windows and row and windows[-1].get('_origin') is c:
+   windows[-1]['_window'][1]=b-windows[-1]['_at'];continue
+  copy=dict(c);copy['_origin']=c;copy['_at']=a;copy['_window']=[a-start,b-a];windows.append(copy)
+ if fps:
+  quantized=[]
+  for c in windows:
+   offset,d=c['_window'];a=math.ceil(c['_at']*fps-1e-8)/fps;b=math.ceil((c['_at']+d)*fps-1e-8)/fps
+   if b-a<1e-8:continue
+   c['_window']=[offset+a-c['_at'],b-a];c['_at']=a
+   quantized.append(c)
+  windows=quantized
+ return windows
+
 def render(job,project,preview=False):
  clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),first['fps'] if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
+ clips=visible_clips(clips,fps)
  crf={'Preview':28,'Standard':21,'High':18,'Maximum':15}.get(exp.get('quality'),21)
- work=ROOT/'cache'/('render-'+job['id']);work.mkdir();outputs=[];total=sum(timing(c)[0][-1][1]+(0 if c.get('gap') else number(c.get('hold'),0,0,10)) for c in clips);done=0
+ work=ROOT/'cache'/('render-'+job['id']);work.mkdir();outputs=[];total=sum(c['_window'][1] for c in clips);done=0
  try:
   for idx,c in enumerate(clips):
    if c.get('gap'):
-    d=number(c['gap'],1,.01,86400);part=work/f'clip-{idx:04d}.mp4';outputs.append(part);job['operation']='空白区間を生成中'
+    d=c['_window'][1];part=work/f'clip-{idx:04d}.mp4';outputs.append(part);job['operation']='空白区間を生成中'
     run(job,['-f','lavfi','-i',f'color=c=black:s={w}x{h}:r={fps}','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t',d,'-c:v','libx264','-preset','veryfast','-threads','2','-crf',crf,'-pix_fmt','yuv420p','-c:a','aac','-ar','48000','-video_track_timescale','90000',part],d,done/max(total,.001)*.85,d/max(total,.001)*.85)
     done+=d;continue
    check(job);m=MEDIA[c['media']];nodes,pieces=timing(c);duration=nodes[-1][1];hold=number(c.get('hold'),0,0,10);vf=tone(m);source=m['path'];source_duration=c['out']-c['in'];seek=c['in'];job['operation']=f'クリップ {idx+1}/{len(clips)} を処理中'
@@ -348,11 +383,14 @@ def render(job,project,preview=False):
    else:graph.append(f'anullsrc=r=48000:cl=stereo,atrim=duration={duration+hold}[mix]')
    fadein=number(audio.get('fadeIn'),0,0,duration/2);fadeout=number(audio.get('fadeOut'),0,0,duration/2)
    graph.append(f'[mix]afade=t=in:d={max(.001,fadein)},afade=t=out:st={max(0,duration+hold-fadeout)}:d={max(.001,fadeout)}[a]')
+   offset,window_duration=c['_window']
+   graph[0]=graph[0].replace('[v]',f',trim=start={offset}:duration={window_duration},setpts=PTS-STARTPTS[v]')
+   graph[-1]=graph[-1].replace('[a]',f',atrim=start={offset}:duration={window_duration},asetpts=PTS-STARTPTS[a]')
    part=work/f'clip-{idx:04d}.mp4';outputs.append(part)
    script=work/'graph.txt';script.write_text(';\n'.join(graph))
    job['operation']=f'クリップ {idx+1}/{len(clips)} を書き出し中'
-   run(job,input_args+['-filter_complex_script',script,'-map','[v]','-map','[a]','-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',crf,'-c:a','aac','-b:a','192k','-ar','48000','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',part],duration+hold,done/max(total,.001)*.85,(duration+hold)/max(total,.001)*.85)
-   done+=duration+hold
+   run(job,input_args+['-filter_complex_script',script,'-map','[v]','-map','[a]','-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',crf,'-c:a','aac','-b:a','192k','-ar','48000','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',part],window_duration,done/max(total,.001)*.85,window_duration/max(total,.001)*.85)
+   done+=window_duration
    if (work/'stabilized.mp4').exists():(work/'stabilized.mp4').unlink()
   concat=work/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in outputs));joined=work/'joined.mp4'
   job['operation']='クリップを結合中';run(job,['-f','concat','-safe','0','-i',concat,'-c','copy',joined],total,.85,.04)

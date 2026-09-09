@@ -4,3 +4,32 @@
 @media(pointer:coarse){button,a.download-link{min-height:44px}input[type=range]{height:36px}input,select,textarea{font-size:16px}.control-label{font-size:14px}button{touch-action:manipulation}.clip-block span{font-size:13px}}
 @media(max-width:800px){body{padding-bottom:env(safe-area-inset-bottom)}.topbar{position:sticky;top:0;z-index:8;background:var(--bg);padding-top:env(safe-area-inset-top);height:calc(60px + env(safe-area-inset-top));gap:6px}.brand{flex:none;width:30px;font-size:23px}.project-heading{min-width:0}.project-heading input{width:100%;min-width:0;font-size:16px}.top-actions{flex:none;gap:1px}.top-actions #openProject{display:block}.top-actions button{font-size:13px!important;padding:8px}.top-actions .primary span{display:none}.workflow{position:sticky;top:calc(60px + env(safe-area-inset-top));z-index:8;background:var(--bg);height:48px}.workflow button{font-size:13px;padding:0 14px}.workspace{display:flex;flex-direction:column}.viewer-panel{order:0;height:clamp(300px,43svh,460px);flex:none;position:sticky;top:calc(108px + env(safe-area-inset-top));z-index:5;background:var(--bg)}.viewer-top{height:38px;min-height:38px}.viewer-controls{min-height:48px;gap:5px}.viewer-controls .mono{font-size:12px}.viewer-foot{padding-bottom:0;min-height:44px}.aspect-buttons{display:flex;width:100%;justify-content:center}.aspect-buttons button{font-size:13px;padding:6px 12px}.stage{min-height:110px}.timeline-panel{order:1;flex:none}.timeline-toolbar{height:auto;min-height:48px;display:block;overflow-x:auto}.timeline-toolbar>div:first-child{display:flex;min-width:max-content;justify-content:space-between}.timeline-toolbar button{padding:6px 9px;font-size:14px}.timeline-toolbar button span{display:inline}.timeline-zoom{display:flex;justify-content:flex-end;height:44px;border-top:1px solid var(--border)}.timeline-zoom input{width:100px}.timeline-zoom>span{display:block;margin-right:auto}.timeline-layout{height:152px}.timeline-footer{min-height:36px;height:auto}.timeline-footer #statusLine{font-size:12px;line-height:1.6}.inspector{order:3;height:auto;max-height:none;overflow:visible;border-top:1px solid var(--border)}#inspectorBody{overflow:visible;padding:18px}.control-section{max-width:none}.media-panel{order:2;display:none;padding:12px 18px;border-bottom:1px solid var(--border)}body[data-step=import] .media-panel{display:flex}.media-list{display:flex;gap:10px;overflow-x:auto}.media-card{width:145px;flex:none}.media-card img{height:75px}.media-drop{min-height:44px}.media-drop>span{display:none}.intent-box{margin-top:12px;padding-top:14px}.intent-box p{font-size:14px}.inspector .panel-title{padding:0 18px}.control-section p{font-size:14px}.control-label{font-size:14px}.modal-fields label{font-size:14px}#modalContent{padding:20px}dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:calc(100vw - 20px)}.modal-actions{flex-wrap:wrap}.empty-state h1{font-size:19px}.empty-state p{font-size:14px}.toast{bottom:calc(12px + env(safe-area-inset-bottom));font-size:14px}.preset-grid button{font-size:14px}}
 @media(max-width:800px) and (orientation:landscape){.viewer-panel{position:relative;top:0;height:75svh}.workflow{position:relative;top:0}}
+
+/* Two touch-editable video lanes. Empty lane space remains a scroll surface. */
+.workspace{grid-template-rows:minmax(350px,calc(100dvh - 466px)) auto}
+.timeline-panel{min-height:332px}
+.timeline-layout{height:234px}
+.timeline-toolbar{height:auto;min-height:52px;flex-wrap:wrap;gap:6px}
+.timeline-toolbar>div:first-child{display:flex;overflow-x:auto;align-items:center;white-space:nowrap}
+.video-track{height:64px!important;position:relative;display:block!important;border-bottom:1px solid var(--border);background:#111511}
+.video-track.active-layer{background:#20291c}
+.clip-block{height:60px!important;min-width:3px;padding:7px 20px;touch-action:none;cursor:grab;user-select:none;overflow:hidden}
+.clip-block.dragging{z-index:10;cursor:grabbing;opacity:.85;overflow:visible}
+.clip-block>.filmstrip{pointer-events:none;overflow:hidden}
+.clip-block>span:not(.trim-handle),.clip-block>small{pointer-events:none;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.clip-block .trim-handle{display:block;position:absolute;top:0;bottom:0;width:16px;margin:0!important;background:#e2eeab25;cursor:ew-resize;z-index:2;touch-action:none}
+.trim-in{left:0;border-left:3px solid var(--accent)}
+.trim-out{right:0;border-right:3px solid var(--accent)}
+.clip-block .trim-in{left:0}
+.clip-block .trim-out{left:auto;right:0}
+.timeline-content{height:234px}
+.clip-block>span:not(.trim-handle),.clip-block>small{left:22px;right:22px;font-size:12px}
+.playhead{left:0;will-change:transform}
+.trim-handle:after{content:'';position:absolute;top:22px;left:7px;height:16px;border-left:2px solid var(--accent)}
+.track-labels>span:nth-child(2),.track-labels>span:nth-child(3){height:64px!important}
+.track-labels>span:nth-child(4){height:32px!important}
+.track-labels>span:nth-child(5){height:30px!important}
+.audio-track{height:32px!important;position:relative}
+.audio-mode{font-size:12px;color:var(--muted);padding:7px 10px;display:block}
+#snapToggle.selected{color:var(--accent)}
+@media(max-width:800px){.timeline-layout{height:234px}.timeline-panel{min-height:365px}.timeline-toolbar>div:first-child{justify-content:flex-start}.clip-block .trim-handle{width:20px}.clip-block{padding-left:23px;padding-right:23px}.timeline-scroll{touch-action:pan-x}.timeline-toolbar{overflow-x:auto}}

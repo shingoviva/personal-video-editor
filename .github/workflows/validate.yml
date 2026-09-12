@@ -28,6 +28,7 @@ jobs:
           python tests/server.test.py
           python tests/validate_pipeline.py
           python tests/validate_formats.py
+          python tests/creative.test.py
       - run: python scripts/package-mac.py
       - uses: actions/upload-artifact@v4
         with:

@@ -1,4 +1,4 @@
-# PERSONAL VIDEO EDITOR — V1 Preview · 1.7.1
+# PERSONAL VIDEO EDITOR — V1 Preview · 1.7.2
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
@@ -113,6 +113,7 @@ python3 tests/server.test.py
 python3 tests/reliability.test.py
 node tests/model.test.mjs
 node tests/timeline-zoom.test.mjs
+node tests/timeline-context.test.mjs
 node tests/media-state.test.mjs
 node tests/mobile.test.mjs
 node tests/mobile-container.test.mjs
@@ -186,6 +187,14 @@ SOUNDの「原音を音声トラックへ分離」で、動画の範囲・速度
 Macは最大3段を一時ファイルで合成し、音声は最大4入力へまとめて混ぜます。端末版は最大3映像系統と4音声系統を使い、音声は0.25秒単位で混合します。1倍を超える原音量・極端な速度・スタビライズは処理プレビューで確認してください。端末の音声速度変更は音程も変化し、Macのatempo処理とは異なります。
 
 今回のSafari実機レイアウト・タッチ・GPU書き出し検証は未実施です。旧Macエンジンには追加機能がないためZIPの更新が必要です。
+
+## 1.7.2 — TIMELINE SPLIT / MAC CONTEXT MENU
+
+- タイムラインのクリップをクリックして再生ヘッドを置き、「分割」またはSキーでその時刻を境に分割できます。映像と分離音声のどちらにも対応し、速度ランプを含む属性を左右へ引き継ぎます。
+- Macでは映像・音声クリップ上の右クリック位置へ再生ヘッドを移動し、「ここで分割」「設定を開く」「コピー」「切り取り」「複製」「属性ペースト」「削除」「前詰め削除」を選べます。タイムライン端に近い場合もメニューを画面内へ収めます。
+- ブラウザ版は相対パスだけで構成した静的な `dist/` をGitHub Pagesへ配置できます。検証用の実写素材は `.qa-media/real/IMG_7917.mov` に置き、GitHub・Pages・Mac版ZIPには含めません。
+
+右クリック位置3.00秒で映像を0–3秒／3–12秒へ、6.00秒で分離音声を0–6秒／6–12秒へ分けるChrome自動操作を確認済みです。macOS Safari実機、Magic Mouse、トラックパッドのControlクリックは未検証です。
 
 ## 1.7.1 — MOBILE WORKSPACE / STORAGE
 

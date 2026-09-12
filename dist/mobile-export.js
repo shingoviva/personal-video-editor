@@ -18,8 +18,12 @@ export async function renderOnDevice(project,files,{preview=false,signal,onProgr
  });
  }finally{worker.terminate();await wake?.release?.().catch(()=>{});if(!completed){try{const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle('pve-renders');await dir.removeEntry(outputPath)}catch{}}}
 }
+async function renderDirectory(create=false){const root=await navigator.storage.getDirectory();return root.getDirectoryHandle('pve-renders',{create})}
+export async function deleteRender(path){if(!path)return false;try{const dir=await renderDirectory();await dir.removeEntry(path);return true}catch{return false}}
+export async function cleanOldExports(keepPath){let removed=0;try{const dir=await renderDirectory();for await(const [name,handle]of dir.entries())if(handle.kind==='file'&&name!==keepPath){await dir.removeEntry(name);removed++}}catch{}return removed}
+export async function exportStorageInfo(){let count=0,bytes=0;try{const dir=await renderDirectory();for await(const handle of dir.values())if(handle.kind==='file'){count++;bytes+=(await handle.getFile()).size}}catch{}return{count,bytes}}
 export async function rememberedExport(){try{const info=JSON.parse(localStorage.getItem('pve.last-export'));if(!info)return null;const root=await navigator.storage.getDirectory(),dir=await root.getDirectoryHandle('pve-renders'),handle=await dir.getFileHandle(info.path);return{...info,file:await handle.getFile()}}catch{return null}}
-export function rememberExport(result,name){try{localStorage.setItem('pve.last-export',JSON.stringify({path:result.path,width:result.width,height:result.height,fps:result.fps,duration:result.duration,name}))}catch{}}
+export async function rememberExport(result,name){let previous,saved=false;try{previous=JSON.parse(localStorage.getItem('pve.last-export'));localStorage.setItem('pve.last-export',JSON.stringify({path:result.path,width:result.width,height:result.height,fps:result.fps,duration:result.duration,name}));saved=true}catch{}if(saved&&previous?.path&&previous.path!==result.path)await deleteRender(previous.path)}
 let activeDownload;
 export function showDeviceResult(result,name,{modal,head,esc,status}){
  activeDownload?.dispose();const file=new File([result.file],safeName(name,'mp4'),{type:'video/mp4'});activeDownload=downloadable(file);const url=activeDownload.url;

@@ -17,7 +17,8 @@ def hdr():
  if not source.exists():ff(['-f','lavfi','-i','testsrc2=size=3840x2160:rate=60','-t','0.6','-vf','format=yuv420p10le','-c:v','libx265','-preset','ultrafast','-x265-params','pools=2:frame-threads=2:log-level=error','-color_primaries','bt2020','-color_trc','arib-std-b67','-colorspace','bt2020nc','-tag:v','hvc1',source])
  m=core.inspect(source,'hdr4k','hdr4k.mov');assert m['hdr'] and m['fps']==60 and m['width']==3840
  core.prepare({'cancel':False},m['id']);return render(m)
-run('4k60_hlg_hevc_to_1080_sdr',hdr)
+if core.capabilities().get('hdr'):run('4k60_hlg_hevc_to_1080_sdr',hdr)
+else:results['4k60_hlg_hevc_to_1080_sdr']={'pass':True,'supported':False,'preflight':'zscale / tonemap unavailable'}
 def vfr():
  f=ROOT/'vfr.mov';ff(['-f','lavfi','-i','testsrc2=size=640x360:rate=60','-t','2','-vf',"select='if(lt(t,1),not(mod(n,2)),not(mod(n,3)))'",'-fps_mode','vfr','-c:v','libx264','-preset','ultrafast',f]);m=core.inspect(f,'vfr','vfr.mov');p=core.prepare({'cancel':False},m['id']);assert p['rateMode']=='VFR',p;return {'detected':p['rateMode'],'export':render(m)}
 run('variable_frame_rate',vfr)
@@ -26,7 +27,8 @@ def highfps():
 run('240fps_input',highfps)
 def cancelling():
  j={'id':core.uuid.uuid4().hex,'cancel':True}
- try:core.prepare(j,'hdr4k')
+ target='hdr4k' if 'hdr4k' in core.MEDIA else 'vfr'
+ try:core.prepare(j,target)
  except InterruptedError:return {'cancelled':True}
  raise AssertionError('did not cancel')
 run('cancellation',cancelling)

@@ -16,6 +16,18 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Validate native video pipeline
+        run: |
+          python tests/capabilities.test.py
+          python tests/images.test.py
+          python tests/layers.test.py
+          python tests/multitrack.test.py
+          python tests/reliability.test.py
+          python tests/server.test.py
+          python tests/validate_pipeline.py
+          python tests/validate_formats.py
       - run: python scripts/package-mac.py
       - uses: actions/upload-artifact@v4
         with:

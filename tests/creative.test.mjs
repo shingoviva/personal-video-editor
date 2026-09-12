@@ -24,7 +24,7 @@ el.onpointerdown(event(1,0));el.onpointerdown(event(2,100));el.onpointermove(eve
 el.onpointerdown(event(1,0));el.onpointercancel();assert.equal(cancels,1);
 // All looks, strengths, skin/highlight/shadow samples share native RGB math.
 const samples=[];for(const color of Object.values(lookPresets))for(const amount of [0,.5,1,1.5])for(const rgb of [[.7,.45,.3],[.95,.9,.85],[.1,.12,.2]])samples.push({rgb,color,amount});
-const native=JSON.parse(execFileSync('python',['-c',"import sys,json;sys.path.insert(0,'engine');from color_engine import grade;print(json.dumps([grade(s['rgb'],s['color'],s['amount']) for s in json.load(sys.stdin)]))"],{input:JSON.stringify(samples),encoding:'utf8'}));
+const native=JSON.parse(execFileSync('python3',['-c',"import sys,json;sys.path.insert(0,'engine');from color_engine import grade;print(json.dumps([grade(s['rgb'],s['color'],s['amount']) for s in json.load(sys.stdin)]))"],{input:JSON.stringify(samples),encoding:'utf8'}));
 samples.forEach((s,i)=>gradeRGB(s.rgb,s.color,s.amount).forEach((v,j)=>assert(Math.abs(v-native[i][j])<1e-10)));
 const mono=gradeRGB([.8,.4,.2],lookPresets.MONO,1.5);assert(Math.abs(mono[0]-mono[2])<1e-9);
 console.log('Creative: freeze/source invariance, ramps/stretch/pinch transactions, fade/text timing, 96 native/browser RGB matches PASS');

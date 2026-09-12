@@ -18,3 +18,5 @@
 5. Mac版を配布する場合はReleaseを作り、Actionsの実行後に生成された`personal-video-editor-mac` artifact内のZIPを添付します。
 
 `Publish GitHub Pages`は手動実行だけにしてあります。リポジトリへpushしただけではアプリを公開しません。公開リポジトリにする場合は、ライセンス方針を決めてからLICENSEを追加してください。
+
+通常のpushとPull Requestでは `Validate editor` がJavaScriptテスト、静的ビルド、Python動画処理テスト、Mac ZIP生成を実行します。FFmpegの任意機能がランナーにない場合、その機能はスキップとして記録し、不足機能を処理前に検出できることを確認します。Pages公開はこの検証とは別の手動操作です。

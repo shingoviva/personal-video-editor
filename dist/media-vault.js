@@ -6,3 +6,4 @@ export async function retainFile(id,file,signal){
 }
 export async function restoreFile(id){const d=await db();return new Promise((resolve,reject)=>{const r=d.transaction('files').objectStore('files').get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)});}
 export async function forgetUnused(ids){const d=await db();return new Promise((resolve,reject)=>{const tx=d.transaction('files','readwrite'),s=tx.objectStore('files'),r=s.openKeyCursor();r.onsuccess=()=>{const c=r.result;if(c){if(!ids.has(c.key))s.delete(c.key);c.continue()}};tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});}
+export async function vaultInfo(){const d=await db();return new Promise((resolve,reject)=>{let count=0,bytes=0;const r=d.transaction('files').objectStore('files').openCursor();r.onsuccess=()=>{const c=r.result;if(!c)return resolve({count,bytes});count++;bytes+=c.value?.size||0;c.continue()};r.onerror=()=>reject(r.error)});}

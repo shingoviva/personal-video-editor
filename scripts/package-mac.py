@@ -15,6 +15,7 @@ with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=9) as archive:
 with ZipFile(output) as archive:
     assert archive.testzip() is None
     assert 'Personal-Video-Editor/dist/timeline-gestures.js' in archive.namelist()
+    assert 'Personal-Video-Editor/dist/timeline-zoom.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/image-media.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/assets.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/media-state.js' in archive.namelist()
@@ -25,5 +26,5 @@ with ZipFile(output) as archive:
     assert 'Personal-Video-Editor/engine/audio_engine.py' in archive.namelist()
     assert 'Personal-Video-Editor/dist/audio-preview.js' in archive.namelist()
     assert 'Personal-Video-Editor/dist/attributes.js' in archive.namelist()
-    assert b"'build':'1.7.0'" in archive.read('Personal-Video-Editor/engine/core.py')
+    assert b"'build':'1.7.1'" in archive.read('Personal-Video-Editor/engine/core.py')
 print(f'Mac bundle verified: {output.stat().st_size:,} bytes')

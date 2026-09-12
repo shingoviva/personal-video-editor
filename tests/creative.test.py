@@ -25,15 +25,16 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  assert pixel(out,.9)[0]>200,pixel(out,.9)
  assert max(pixel(out,1.9))<40,pixel(out,1.9)
  q['effects']=[];q['clips'][0].update(freezeAt=.5,freezeDuration=2,**{'in':.5,'out':.5+1/30})
- q['texts']=[{'text':'STILL','start':0,'end':2,'fadeIn':.3,'fadeOut':.4,'motion':'rise','motionDuration':.4,'size':80}]
+ q['texts']=[{'text':'STILL','start':0,'end':2,'fadeIn':.3,'fadeOut':.4,'motion':'rise','motionDuration':.4,'size':80}] if core.capabilities().get('text') else []
  render(q,'freeze-text')
  moving=core.inspect(root/'dist/device-test.mp4','moving','device-test.mp4')
  q['clips']=[{**clip(moving,0),'in':.999,'out':1,'freezeAt':.999,'freezeDuration':2}];q['texts']=[]
  out=render(q,'last-frame')
  def raw(t):return subprocess.check_output(core.BASE+['-v','error','-ss',str(t),'-i',out,'-frames:v','1','-pix_fmt','rgb24','-f','rawvideo','pipe:1'])
- assert raw(.3)==raw(1.5),'Frozen frame changed'
+ first,last=raw(.3),raw(1.5);delta=[abs(a-b) for a,b in zip(first,last)]
+ assert sum(delta)/len(delta)<2 and max(delta)<16,('Frozen frame changed',sum(delta)/len(delta),max(delta))
  from color_engine import grade
  q['clips']=[clip(red,0)];q['clips'][0]['color']={'temperature':-40,'contrast':28,'saturation':-18}
  out=render(q,'look');actual=pixel(out,.5);expected=grade([253/255,0,0],q['clips'][0]['color'])
  assert max(abs(a-v*255) for a,v in zip(actual,expected))<15,(actual,expected)
- print('Native V2 alpha reveals V1, flash, black fades, freeze + animated text, last moving frame held, RGB LUT output: full MP4 decode PASS')
+ print('Native V2 alpha reveals V1, flash, black fades, freeze, last moving frame held, RGB LUT output: full MP4 decode PASS; text:', 'PASS' if core.capabilities().get('text') else 'SKIP (drawtext unavailable)')

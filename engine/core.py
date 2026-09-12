@@ -26,7 +26,18 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.7.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;text='drawtext' in f
+ return {'ready':ready,'complete':ready and stabilization and hdr and text,'stabilization':stabilization,'hdr':hdr,'text':text,'videotoolbox':'h264_videotoolbox' in e,'build':'1.7.1','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+
+def preflight_render(project,clips=None,caps=None):
+ """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
+ clips=clips if clips is not None else project.get('clips',[]);caps=caps or capabilities();missing=[]
+ if not caps.get('ready'):missing.append('H.264（libx264）')
+ if any(c.get('stabilization','OFF')!='OFF' and not c.get('freezeDuration') for c in clips if not c.get('gap')) and not caps.get('stabilization'):missing.append('手ぶれ補正（vidstab）')
+ if any(MEDIA.get(c.get('media'),{}).get('hdr') for c in clips if not c.get('gap')) and not caps.get('hdr'):missing.append('HDR→SDR（zscale / tonemap）')
+ if any(str(t.get('text','')) for t in project.get('texts',[])) and not caps.get('text'):missing.append('文字描画（drawtext）')
+ if missing:raise ValueError('この編集に必要なFFmpeg機能がありません：'+ '、'.join(missing)+'。Macエンジンの情報をご確認ください。')
+ return True
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
@@ -349,7 +360,7 @@ def visible_clips(clips,fps=None):
 
 def render(job,project,preview=False,_token=None,_size=None):
  audio_clips=validate_audio(project)
- clips=validate(project);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
+ clips=validate(project);preflight_render(project,clips);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
  video_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(clips)])

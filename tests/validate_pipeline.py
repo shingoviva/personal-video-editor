@@ -29,8 +29,13 @@ for speed in (.05,20):
  q=copy.deepcopy(p);q['clips'][0].update(speed=speed,out=.5 if speed==.05 else 1.5)
  test('speed_'+str(speed),lambda q=q:render(q))
 q=copy.deepcopy(p);q['clips'][0].update(speed=.1,endSpeed=8,curve='ease-in-out');test('ramp_audio_sync',lambda:render(q))
-q=copy.deepcopy(p);q['clips'][0].update(speed=.3,interpolation='blend',hold=.5);q['clips'][0]['color']={'exposure':.4,'contrast':20,'shadows':10,'temperature':-20,'vibrance':10};q['texts']=[{'text':"PERSONAL : 50% 'test' \\ 中文",'start':0,'end':2,'fade':.2,'size':30,'x':.5,'y':.8,'opacity':1,'font':'Sans'}];test('blend_color_text_hold',lambda:render(q))
-q=copy.deepcopy(p);q['clips'][0]['stabilization']='NATURAL';test('stabilizer',lambda:render(q))
+caps=core.capabilities()
+q=copy.deepcopy(p);q['clips'][0].update(speed=.3,interpolation='blend',hold=.5);q['clips'][0]['color']={'exposure':.4,'contrast':20,'shadows':10,'temperature':-20,'vibrance':10};q['texts']=[{'text':"PERSONAL : 50% 'test' \\ 中文",'start':0,'end':2,'fade':.2,'size':30,'x':.5,'y':.8,'opacity':1,'font':'Sans'}] if caps.get('text') else [];test('blend_color_hold'+('_text' if caps.get('text') else ''),lambda:render(q));results['text_capability']={'pass':True,'supported':bool(caps.get('text'))}
+q=copy.deepcopy(p);q['clips'][0]['stabilization']='NATURAL'
+if caps.get('stabilization'):test('stabilizer',lambda:render(q))
+else:
+ try:core.preflight_render(q,caps=caps);raise AssertionError('missing vidstab accepted')
+ except ValueError as e:assert 'vidstab' in str(e);results['stabilizer']={'pass':True,'supported':False,'preflight':str(e)}
 q=copy.deepcopy(p);q['clips']=[{**c,'out':.5},{'id':'gap','gap':.4,'media':m['id']},{**c,'id':'c2','in':.5,'out':1.5,'speed':2}];q['bgm']={'media':m['id'],'volume':.2,'fadeIn':.1,'fadeOut':.2};test('multi_clip_gap_bgm',lambda:render(q))
 for mode in ('HIGH FASHION','CLUB'):
  test('analyze_'+mode,lambda mode=mode:{k:v for k,v in core.analyze({'cancel':False},m['id'],mode).items() if k!='samples'})

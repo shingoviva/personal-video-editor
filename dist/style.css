@@ -82,3 +82,68 @@ body.inspector-expanded .workspace{grid-template-columns:minmax(0,1fr)!important
 .context-menu{position:fixed;z-index:60;width:220px;padding:6px;background:#171c16;border:1px solid #59644c;border-radius:7px;box-shadow:0 16px 48px #000c}.context-menu button{display:block;width:100%;padding:9px 11px;border:0;border-radius:3px;text-align:left;font-size:13px}.context-menu button:hover,.context-menu button:focus-visible{background:#e2eeab18;color:var(--accent)}.context-menu button:disabled{opacity:.38}.context-menu .context-separator{height:1px;margin:5px;background:var(--border)}
 @media(max-width:800px){.viewer-panel{position:relative;top:auto;z-index:auto;order:initial}.timeline-panel{position:relative;z-index:auto}.timeline-secondary{display:none!important}#timelineMore{display:inline-flex}.timeline-toolbar>div:first-child{flex-wrap:nowrap;overflow:visible}.timeline-toolbar{flex-wrap:nowrap}.timeline-zoom{margin-left:auto}.empty-actions{width:100%}.empty-actions button{min-height:36px}body[data-step=import] .media-panel{overflow:auto}body[data-step=import] .media-list{min-height:75px}.timeline-scroll{touch-action:pan-x}}
 @media(max-width:430px){.timeline-toolbar #ripple span,.timeline-toolbar #deleteClip span,.timeline-toolbar #split span{display:none}.timeline-toolbar button{min-width:38px}.timeline-zoom input{width:48px}.action-grid{grid-template-columns:1fr}}
+
+/* 1.7.3 — editorial workspace hierarchy */
+:root{--bg:#0d100f;--panel:#151917;--surface:#1d231f;--border:#2a322d;--text:#edf0eb;--muted:#8d9891;--accent:#dce9a9;--accent-soft:#dce9a914;--panel-raised:#191e1b;--shadow:0 18px 50px #03050452}
+body{background:radial-gradient(circle at 52% -20%,#263129 0,transparent 40%),var(--bg)}
+button{border-radius:6px;transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease}
+input,select,textarea{border-radius:7px;background:#0c100e;border-color:#303933}
+.topbar{background:#111512e8;border-bottom-color:#29312c;backdrop-filter:blur(18px);padding-inline:20px}
+.brand{display:flex;align-items:center;width:auto;min-width:58px;height:34px;padding:0 10px;border:1px solid #39433b;border-radius:9px;background:linear-gradient(145deg,#202720,#121613);font-size:20px;letter-spacing:-2px;box-shadow:inset 0 1px #ffffff0b,0 8px 22px #0004}
+.brand-cut{margin:0 4px}
+.project-heading input{font-size:15px;letter-spacing:.01em}
+.engine-pill{border-radius:999px;background:#0b0e0c;border-color:#354038}
+.primary{border-radius:7px;box-shadow:0 7px 20px #0004}
+.workflow{height:62px;padding:8px 16px;gap:8px;align-items:stretch;background:#111512;border-bottom-color:#29312c;scrollbar-width:none}
+.workflow::-webkit-scrollbar{display:none}
+.workflow-group{display:flex;align-items:stretch;flex:none;position:relative;padding:15px 5px 2px;border:1px solid #29312c;border-radius:9px;background:linear-gradient(180deg,#1a1f1b,#151916);box-shadow:inset 0 1px #ffffff08}
+.workflow-label{position:absolute;top:4px;left:10px;color:#77827b;font:8px var(--mono);letter-spacing:.09em;line-height:1;white-space:nowrap;text-transform:uppercase;pointer-events:none}
+.workflow-label b{color:#aeb9b1;font-weight:500;margin-right:5px}
+.workflow button{height:34px;padding:0 13px;border:0;border-radius:6px;color:#9aa49e;font-size:11px;letter-spacing:.08em}
+.workflow button:hover{color:var(--text);background:#ffffff08}
+.workflow button.active{color:#172012;background:var(--accent);border:0;box-shadow:0 5px 18px #0005,inset 0 1px #ffffff66;font-weight:700}
+.workflow .analyze-tab{margin:0;color:#b8c99a}
+.workflow-assist{margin-left:auto;border-color:#3a4739;background:linear-gradient(180deg,#1b221b,#141914)}
+.media-panel,.inspector,.timeline-panel{background:linear-gradient(180deg,#171b18,#121613)}
+.viewer-panel{background:radial-gradient(circle at 50% 36%,#171c18,#0b0e0c 72%)}
+.panel-title{color:#cbd2cc}
+.stage{border-color:#2a312c;border-radius:12px;background:linear-gradient(145deg,#090b0a,#050706);box-shadow:var(--shadow),inset 0 0 0 1px #ffffff04}
+.frame-symbol{filter:drop-shadow(0 8px 18px #0008)}
+.media-card,.asset-card{border-radius:8px;background:#111512;overflow:hidden}
+.media-card.active,.asset-card.active{box-shadow:0 0 0 1px var(--accent),0 10px 25px #0004}
+.media-drop{border-radius:9px;background:#11151280}
+.inspector>.panel-title{background:#171c19;border-bottom-color:#29312c}
+#inspectorBody{scrollbar-color:#465149 transparent}
+.control-section+.control-section{border-top-color:#2b332e}
+.info-note,.random-card{border-radius:8px}
+.preset-grid button{border-radius:7px}
+.transport .play-button{width:40px;height:40px;background:linear-gradient(145deg,#293129,#171c18);box-shadow:0 7px 18px #0006}
+.aspect-buttons{padding:3px;border:1px solid #29312c;border-radius:8px;background:#0d100e}
+.aspect-buttons button{border-radius:5px}
+.timeline-panel{border-top-color:#313a34;box-shadow:0 -15px 45px #0003}
+.timeline-toolbar{min-height:60px;padding:6px 14px;background:#171c19;border-bottom-color:#29312c;flex-wrap:nowrap}
+.timeline-toolbar>div.timeline-actions{display:flex;align-items:stretch;gap:7px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;flex:1;min-width:0}
+.timeline-actions::-webkit-scrollbar{display:none}
+.section-tag{align-self:center;margin-right:8px;color:#c4cec5}
+.tool-cluster{position:relative;display:flex!important;align-items:flex-end!important;gap:2px!important;min-height:46px;padding:14px 5px 3px;border:1px solid #2c3530;border-radius:8px;background:#111512;flex:none}
+.tool-cluster-label{position:absolute;top:4px;left:8px;color:#6f7c74;font:8px var(--mono);letter-spacing:.1em;pointer-events:none}
+.timeline-toolbar .tool-cluster button{min-height:25px;padding:4px 8px;border-radius:5px;color:#aeb8b1}
+.timeline-toolbar .tool-cluster button:hover{background:#ffffff0b;color:var(--text)}
+.timeline-toolbar .edit-cluster{border-color:#42503f;background:#182019}
+.timeline-toolbar .edit-cluster #split{color:var(--accent)}
+.timeline-zoom{flex:none;padding:4px 6px;border:1px solid #2c3530;border-radius:8px;background:#111512}
+.timeline-zoom button{width:28px;height:28px;padding:0}
+.track-labels{background:#121613;border-right-color:#313a34}
+.ruler,.video-track,.editable-audio,.fx-track{border-color:#242c27}
+.clip-block{border-radius:6px;box-shadow:inset 0 1px #ffffff12}
+.clip-block.selected{box-shadow:0 0 0 1px var(--accent),0 7px 18px #0006}
+.audio-clip,.wave-block{border-radius:5px}
+.timeline-footer{background:#111512;border-top-color:#28302b}
+.context-menu,dialog{border-radius:11px;background:#171c19;border-color:#46534a;box-shadow:0 28px 80px #000c}
+*{scrollbar-width:thin;scrollbar-color:#3d4841 transparent}
+*::-webkit-scrollbar{width:7px;height:7px}*::-webkit-scrollbar-thumb{background:#3d4841;border-radius:999px}*::-webkit-scrollbar-track{background:transparent}
+@media(hover:hover) and (pointer:fine){button:not(:disabled):hover{transform:translateY(-1px)}.workflow button:hover,.timeline-toolbar button:hover{transform:none}}
+@media(max-width:1200px){.workflow-label{display:none}.workflow-group{padding-top:2px}.workflow{height:48px;padding-block:5px}.workflow button{height:36px;padding-inline:10px}.timeline-toolbar .tool-cluster button{padding-inline:6px}.section-tag{display:none}}
+@media(max-width:800px){.workflow{height:44px;min-height:44px;padding:4px 5px;gap:3px}.workflow-group{display:contents}.workflow button{height:36px;padding:0 11px;border:1px solid transparent}.workflow button.active{border-color:var(--accent)}.workflow-assist{margin-left:0}.timeline-toolbar{min-height:43px;padding:3px 6px}.timeline-toolbar>div.timeline-actions{gap:3px;overflow:visible}.tool-cluster{min-height:35px;padding:2px!important;border:0;border-radius:6px;background:transparent}.timeline-toolbar .tool-cluster.timeline-secondary{display:none!important}.tool-cluster-label{display:none}.timeline-toolbar .tool-cluster button{min-height:31px;padding:4px 7px}.timeline-zoom{padding:2px 3px;border:0;background:transparent}.stage{border-radius:8px}.brand{height:31px;min-width:51px;padding-inline:8px}}
+@media(max-width:430px){.workflow button{padding-inline:9px;font-size:10px}.workflow .analyze-tab{font-size:0}.workflow .analyze-tab::after{content:'✧';font-size:15px}.timeline-toolbar .edit-cluster button{min-width:34px}.timeline-toolbar #timelineMore{min-width:48px}.brand{min-width:47px}}
+@media(prefers-reduced-motion:reduce){button,.toast{transition:none!important}}

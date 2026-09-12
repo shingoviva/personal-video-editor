@@ -26,7 +26,7 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.6.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':'libx264' in e,'stabilization':'vidstabtransform' in f,'hdr':'zscale' in f and 'tonemap' in f,'text':'drawtext' in f,'videotoolbox':'h264_videotoolbox' in e,'build':'1.7.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def inspect(path,id,name):
  r=subprocess.run([FFPROBE,'-v','error','-show_streams','-show_format','-of','json',str(path)],capture_output=True,text=True,timeout=90)
@@ -379,11 +379,11 @@ def render(job,project,preview=False,_token=None,_size=None):
    if stabil!='OFF':
     if not capabilities()['stabilization']:raise ValueError('このFFmpegにはvidstabがありません。libvidstab対応版が必要です。')
     # Stabilize before time remapping. Each selected source segment is streamed to disk, not RAM.
-    trf='motion.trf';pre=work/'stabilized.mp4';smooth={'WEAK':5,'MEDIUM':15,'STRONG':30,'HANDHELD':3,'NATURAL':10,'GIMBAL':25,'TRIPOD':60}.get(stabil,15)
+    trf='motion.trf';pre=work/'stabilized.mkv';smooth={'WEAK':5,'MEDIUM':15,'STRONG':30,'HANDHELD':3,'NATURAL':10,'GIMBAL':25,'TRIPOD':60}.get(stabil,15)
     job['operation']=f'手ぶれの解析 {idx+1}/{len(clips)}'
     run(job,['-ss',seek,'-i',source,'-t',source_duration,'-an','-vf',','.join(vf+[f'vidstabdetect=shakiness=5:accuracy=9:result={trf}']),'-f','null','-'],source_duration,done/max(total,.001)*.85,.02,cwd=work)
     job['operation']='手ぶれを補正中'
-    run(job,['-ss',seek,'-i',source,'-t',source_duration,'-vf',','.join(vf+[f'vidstabtransform=input={trf}:smoothing={smooth}:optzoom=1:crop=black','format=yuv420p']),'-c:v','libx264','-preset','veryfast','-crf','16','-threads','2','-c:a','aac',pre],source_duration,done/max(total,.001)*.85,.03,cwd=work)
+    run(job,['-ss',seek,'-i',source,'-t',source_duration,'-vf',','.join(vf+[f'vidstabtransform=input={trf}:smoothing={smooth}:optalgo=opt:optzoom=1:crop=black:interpol=bicubic','format=yuv420p']),'-c:v','libx264','-preset','veryfast','-crf','10','-threads','2','-c:a','pcm_f32le','-ar','48000','-ac','2',pre],source_duration,done/max(total,.001)*.85,.03,cwd=work)
     source=str(pre);seek=0;vf=[]
    if c.get('freezeDuration'):
     if m.get('kind')!='image':seek=freeze_seek(job,m,number(c.get('freezeAt'),c['in'],0,m['duration']));source_duration=max(.2,source_duration)
@@ -407,7 +407,7 @@ def render(job,project,preview=False,_token=None,_size=None):
     for k,(a,b,s,length) in enumerate(pieces):
      ap=work/f'audio-{k:03d}.wav';audio_parts.append(ap)
      af=f'atrim=duration={b-a},asetpts=PTS-STARTPTS,apad=pad_dur=1,{atempo(s)},apad,atrim=duration={length},asetpts=N/SR/TB'
-     run(job,['-ss',seek+a,'-i',source,'-vn','-af',af,'-c:a','pcm_s16le','-ar','48000','-ac','2',ap],length,done/max(total,.001)*.85,0)
+     run(job,['-ss',seek+a,'-i',source,'-vn','-af',af,'-c:a','pcm_f32le','-ar','48000','-ac','2',ap],length,done/max(total,.001)*.85,0)
     alist=work/'audio-concat.txt';alist.write_text(''.join(f"file '{p.name}'\n" for p in audio_parts));audio_ramp=work/'ramp.wav'
     run(job,['-f','concat','-safe','0','-i',alist,'-c','copy',audio_ramp],duration,done/max(total,.001)*.85,0)
     input_args+=['-i',audio_ramp]
@@ -436,7 +436,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    job['operation']=f'クリップ {idx+1}/{len(clips)} を書き出し中'
    run(job,input_args+['-filter_complex_script',script,'-map','[v]','-map','[a]','-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',crf,'-c:a','aac','-b:a','192k','-ar','48000','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',part],window_duration,done/max(total,.001)*.85,window_duration/max(total,.001)*.85)
    done+=window_duration
-   if (work/'stabilized.mp4').exists():(work/'stabilized.mp4').unlink()
+   if (work/'stabilized.mkv').exists():(work/'stabilized.mkv').unlink()
   concat=work/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in outputs));joined=work/'joined.mp4'
   job['operation']='クリップを結合中';run(job,['-f','concat','-safe','0','-i',concat,'-c','copy',joined],total,.85,.04)
   effects=project.get('effects',[])
@@ -465,7 +465,7 @@ def render(job,project,preview=False,_token=None,_size=None):
   args=['-i',joined];bg=MEDIA.get(bgm.get('media'));graph=[]
   if bg:
    args+=['-stream_loop','-1','-i',bg['path']];vol=number(bgm.get('volume'),.3,0,2);fi=number(bgm.get('fadeIn'),0,0,total/2);fo=number(bgm.get('fadeOut'),0,0,total/2)
-   graph=[f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]','[0:a][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95[a]'];args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
+   graph=[f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]','[0:a][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]'];args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
   independent=render_tracks(job,project,audio_clips,work,total)
   if independent:
    # Rebuild a single final mix with the visible video audio and independent lanes.
@@ -474,10 +474,11 @@ def render(job,project,preview=False,_token=None,_size=None):
     args+=['-stream_loop','-1','-i',bg['path']]
     graph.append(f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]');labels.append('[bg]');index+=1
    for path in independent:args+=['-i',path];labels.append(f'[{index}:a]');index+=1
-   graph.append(''.join(labels)+f'amix=inputs={len(labels)}:duration=first:normalize=0,alimiter=limit=0.95:latency=1[a]')
+   graph.append(''.join(labels)+f'amix=inputs={len(labels)}:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]')
    args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
   if final_vf:args+=['-vf',','.join(final_vf),'-c:v','libx264','-preset','fast','-threads','2','-crf',crf]
   else:args+=['-c:v','copy']
+  if bg or independent:args+=['-b:a','256k','-ar','48000']
   args+=['-c:a','aac' if bg or independent else 'copy','-t',total,'-movflags','+faststart',out]
   job['operation']='MP4を仕上げ中';run(job,args,total,.89,.09,verify_decode=True)
   return {'file':out.name,'url':('/cache/' if preview else '/exports/')+out.name,'duration':total,'width':w,'height':h,'fps':fps,'preview':preview,'verified':True,'recoveredOutputs':job.get('recoveredOutputs',0)}

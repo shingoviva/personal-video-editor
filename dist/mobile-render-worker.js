@@ -4,9 +4,9 @@ import {clipAlpha,effectAlpha,textPose} from './creative.js';
 import {imageBitmap} from './image-media.js';
 import {renderer} from './preview.js';
 import {sequence,visibleSequence,timing,sourceOffset} from './model.js';
-import {outputSettings,sourceTime,gainAt,held,mixWindow} from './mobile-model.js';
+import {outputSettings,sourceTime,gainAt,held,mixWindow,limitStereo} from './mobile-model.js';
 import {translation,smoothPath,correctionAt} from './mobile-stabilize.js';
-let cancelled=false;
+let cancelled=false,limiter={gain:1};
 const check=()=>{if(cancelled)throw new DOMException('書き出しを中止しました。','AbortError')};
 const progress=(operation,value)=>postMessage({type:'progress',operation,value});
 const open=file=>new Input({formats:ALL_FORMATS,source:new BlobSource(file)});
@@ -24,7 +24,7 @@ export async function mixAudio(rows,resources,p,start,end){
  for(const [begin,stop] of ranges){const chunk=await audioRange(track,begin,stop);mixWindow(data,lo,hi-lo,chunk.planes,i=>{const s=sourceTime(row,start+(lo+i)/rate),pos=c.loop?s%res.duration:s;return pos>=begin&&pos<stop?(pos-begin)*chunk.rate:-1},i=>trackVolume*gainAt(start+(lo+i)/rate-row.start+(row.offset||0),row.originalDuration??row.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut));}
  }
  const bg=resources.get(p.bgm.media);if(bg?.audio&&p.bgm.volume){let cursor=start;while(cursor<end-1e-8){check();const local=cursor%bg.duration,stop=Math.min(end,cursor+bg.duration-local);if(stop<=cursor)break;const chunk=await audioRange(bg.audio,local,local+stop-cursor+.002),lo=Math.max(0,Math.round((cursor-start)*rate)),hi=Math.min(n,Math.round((stop-start)*rate));mixWindow(data,lo,hi-lo,chunk.planes,i=>i*chunk.rate/rate,i=>gainAt(start+(lo+i)/rate,rows.at(-1).end,p.bgm.volume,p.bgm.fadeIn,p.bgm.fadeOut));cursor=stop;}}
- for(let i=0;i<data.length;i++)data[i]=Math.max(-1,Math.min(1,data[i]));return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
+ limitStereo(data,limiter,rate);return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
 }
 async function stabilize(track,c,onProgress){
  const sink=new CanvasSink(track,{width:48,height:48,fit:'fill',poolSize:1});let last=null,x=0,y=0;const points=[];const count=Math.min(18000,Math.max(1,Math.ceil((c.out-c.in)*12)));function* stamps(){for(let i=0;i<count;i++)yield c.in+i*(c.out-c.in)/count}
@@ -54,7 +54,7 @@ async function frameReader(row,res,cfg,start=row.start){
  },async close(){await iterator?.return?.();blend.width=blend.height=1;if(stable)stable.width=stable.height=1}};
  }catch(e){still?.close();await iterator?.return?.();throw e}
 }
-async function render(p,files,preview,outputPath){
+async function render(p,files,preview,outputPath){limiter={gain:1};
  const cfg=outputSettings(p,preview),rows=visibleSequence(p),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');

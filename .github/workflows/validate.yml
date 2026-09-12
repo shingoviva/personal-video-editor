@@ -1,0 +1,23 @@
+name: Validate editor
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: python scripts/package-mac.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: personal-video-editor-mac
+          path: dist/personal-video-editor-mac.zip

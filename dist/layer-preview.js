@@ -9,7 +9,7 @@ export class LayerPreview{
  async update(row,t,m,url,file,aspect,compare,playing){
   this.state={row,t,m,aspect,compare};this.canvas.style.opacity=String(clipAlpha(row,t));
   if(!row||!url){this.clear();return}
-  if(this.busy)return;
+  if(this.busy){this.pending=[row,t,m,url,file,aspect,compare,playing];return}
   this.busy=true;try{
    if(m.kind==='image'){this.video.pause();await this.still.load(url,async()=>file||await fetch(url).then(r=>r.blob()),m);}
    else{
@@ -20,10 +20,10 @@ export class LayerPreview{
     if(playing&&!c.freezeDuration&&local<tm.nodes.at(-1)[1]&&speed>=.25&&speed<=4){this.video.playbackRate=speed;if(this.video.paused)await this.video.play().catch(()=>{})}else this.video.pause();
    }
    this.paint();
-  }catch{this.painter?.black()}finally{this.busy=false}
+  }catch{this.painter?.black()}finally{this.busy=false;if(this.pending){const next=this.pending;this.pending=null;this.update(...next)}}
  }
  paint(){const s=this.state;if(!s?.row)return;const source=s.m.kind==='image'?this.still.bitmap:this.video;if(source)this.painter?.draw(source,s.row.clip,s.aspect,s.compare)}
- clear(){this.state=null;this.canvas.style.opacity='0';this.video.pause();this.controller?.abort();if(this.url){this.video.removeAttribute('src');this.video.load();this.url=null}this.still.clear();}
+ clear(){this.state=null;this.pending=null;this.canvas.style.opacity='0';this.video.pause();this.controller?.abort();if(this.url){this.video.removeAttribute('src');this.video.load();this.url=null}this.still.clear();}
  pause(){this.video.pause()}
  dispose(){this.clear();this.painter?.dispose()}
 }

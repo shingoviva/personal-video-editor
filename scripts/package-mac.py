@@ -24,5 +24,6 @@ with ZipFile(output) as archive:
     assert 'Personal-Video-Editor/dist/creative.js' in archive.namelist()
     assert 'Personal-Video-Editor/engine/audio_engine.py' in archive.namelist()
     assert 'Personal-Video-Editor/dist/audio-preview.js' in archive.namelist()
-    assert b"'build':'1.6.0'" in archive.read('Personal-Video-Editor/engine/core.py')
+    assert 'Personal-Video-Editor/dist/attributes.js' in archive.namelist()
+    assert b"'build':'1.7.0'" in archive.read('Personal-Video-Editor/engine/core.py')
 print(f'Mac bundle verified: {output.stat().st_size:,} bytes')

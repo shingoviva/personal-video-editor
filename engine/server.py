@@ -5,6 +5,10 @@ from http.cookies import SimpleCookie
 import core
 APP=pathlib.Path(__file__).resolve().parent.parent/'dist'
 TOKEN=secrets.token_urlsafe(32);PORT=int(os.environ.get('PVE_PORT','8765'))
+class QuietServer(http.server.ThreadingHTTPServer):
+ def handle_error(self,request,client_address):
+  if isinstance(sys.exc_info()[1],(BrokenPipeError,ConnectionResetError)):return
+  super().handle_error(request,client_address)
 class Handler(http.server.BaseHTTPRequestHandler):
  protocol_version='HTTP/1.1'
  def log_message(self,format,*args):pass
@@ -105,7 +109,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
   except Exception as e:self.send_json({'error':str(e)},400)
 if __name__=='__main__':
  if not core.FFMPEG or not core.FFPROBE:sys.exit('FFmpeg が必要です。README のインストール手順を確認してください。')
- server=http.server.ThreadingHTTPServer(('127.0.0.1',PORT),Handler);server.daemon_threads=True
+ server=QuietServer(('127.0.0.1',PORT),Handler);server.daemon_threads=True
  url=f'http://127.0.0.1:{PORT}/?token={TOKEN}'
  print('PERSONAL VIDEO EDITOR — 起動しました。終了: Control+C',flush=True)
  if not os.environ.get('PVE_NO_BROWSER'):webbrowser.open(url)

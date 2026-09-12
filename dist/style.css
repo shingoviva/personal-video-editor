@@ -147,3 +147,15 @@ input,select,textarea{border-radius:7px;background:#0c100e;border-color:#303933}
 @media(max-width:800px){.workflow{height:44px;min-height:44px;padding:4px 5px;gap:3px}.workflow-group{display:contents}.workflow button{height:36px;padding:0 11px;border:1px solid transparent}.workflow button.active{border-color:var(--accent)}.workflow-assist{margin-left:0}.timeline-toolbar{min-height:43px;padding:3px 6px}.timeline-toolbar>div.timeline-actions{gap:3px;overflow:visible}.tool-cluster{min-height:35px;padding:2px!important;border:0;border-radius:6px;background:transparent}.timeline-toolbar .tool-cluster.timeline-secondary{display:none!important}.tool-cluster-label{display:none}.timeline-toolbar .tool-cluster button{min-height:31px;padding:4px 7px}.timeline-zoom{padding:2px 3px;border:0;background:transparent}.stage{border-radius:8px}.brand{height:31px;min-width:51px;padding-inline:8px}}
 @media(max-width:430px){.workflow button{padding-inline:9px;font-size:10px}.workflow .analyze-tab{font-size:0}.workflow .analyze-tab::after{content:'✧';font-size:15px}.timeline-toolbar .edit-cluster button{min-width:34px}.timeline-toolbar #timelineMore{min-width:48px}.brand{min-width:47px}}
 @media(prefers-reduced-motion:reduce){button,.toast{transition:none!important}}
+
+/* 1.8.0 — text layers and stable preview nodes */
+#textOverlay{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.text-item{position:absolute;width:max-content;max-width:none;white-space:pre;line-height:1.12;box-sizing:border-box;text-rendering:geometricPrecision;will-change:transform,opacity}
+.text-layer-list{display:grid;gap:5px;margin-top:9px;max-height:180px;overflow:auto}
+.text-layer-list button{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:7px;width:100%;padding:8px;text-align:left;border:1px solid var(--border);background:#101411}
+.text-layer-list button.selected{border-color:var(--accent);background:var(--accent-soft)}
+.text-layer-list span,.text-layer-list small{color:var(--muted);font:10px var(--mono)}
+.text-layer-list strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.text-toolbar{display:flex;gap:6px}.text-toolbar button{width:100%}
+.fx-chip.text-chip{top:15px;height:12px;line-height:10px;border-color:#90a9bd;background:#334757;color:#dceaf4;font-size:8px;z-index:2}
+.fx-chip.text-chip.selected{border-color:var(--accent);background:#53613d;color:#fff}

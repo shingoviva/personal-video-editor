@@ -1,4 +1,4 @@
-import os,sys,pathlib,tempfile,subprocess,copy
+import os,sys,pathlib,tempfile,subprocess,copy,base64,struct,zlib
 with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  os.environ['PVE_DATA']=tmp;root=pathlib.Path(__file__).resolve().parent.parent
  sys.path.insert(0,str(root/'engine'));import core
@@ -13,6 +13,13 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
   r=core.render({'id':name,'cancel':False},p);out=core.ROOT/'exports'/r['file'];core.validate_output(out,2,True);return out
  def pixel(out,t):
   return list(subprocess.check_output(core.BASE+['-v','error','-ss',str(t),'-i',out,'-frames:v','1','-vf','scale=1:1','-pix_fmt','rgb24','-f','rawvideo','pipe:1']))
+ def text_png(width=320,height=160):
+  rows=b''.join(b'\0'+bytes((255,255,255,255))*width for _ in range(height))
+  def chunk(kind,data):return struct.pack('!I',len(data))+kind+data+struct.pack('!I',zlib.crc32(kind+data)&0xffffffff)
+  png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!2I5B',width,height,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(rows))+chunk(b'IEND',b'')
+  return 'data:image/png;base64,'+base64.b64encode(png).decode()
+ def pixel_at(out,t,x=80,y=45):
+  return list(subprocess.check_output(core.BASE+['-v','error','-ss',str(t),'-i',out,'-frames:v','1','-vf',f'crop=2:2:{x}:{y},scale=1:1','-pix_fmt','rgb24','-f','rawvideo','pipe:1']))
  out=render(p,'fade')
  a,b,c=pixel(out,0),pixel(out,.5),pixel(out,1)
  assert a[0]>200 and a[2]<30,(a,b,c)
@@ -25,8 +32,8 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  assert pixel(out,.9)[0]>200,pixel(out,.9)
  assert max(pixel(out,1.9))<40,pixel(out,1.9)
  q['effects']=[];q['clips'][0].update(freezeAt=.5,freezeDuration=2,**{'in':.5,'out':.5+1/30})
- q['texts']=[{'text':'STILL','start':0,'end':2,'fadeIn':.3,'fadeOut':.4,'motion':'rise','motionDuration':.4,'size':80}] if core.capabilities().get('text') else []
- render(q,'freeze-text')
+ q['texts']=[{'text':'静止画面','start':0,'end':2,'fadeIn':.1,'fadeOut':.1,'motion':'rise','motionDuration':.2,'size':80,'x':.5,'y':.5,'raster':{'data':text_png(),'width':320,'height':160}}]
+ text_out=render(q,'freeze-text');assert min(pixel_at(text_out,1))>220,pixel_at(text_out,1)
  moving=core.inspect(root/'dist/device-test.mp4','moving','device-test.mp4')
  q['clips']=[{**clip(moving,0),'in':.999,'out':1,'freezeAt':.999,'freezeDuration':2}];q['texts']=[]
  out=render(q,'last-frame')
@@ -37,4 +44,4 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  q['clips']=[clip(red,0)];q['clips'][0]['color']={'temperature':-40,'contrast':28,'saturation':-18}
  out=render(q,'look');actual=pixel(out,.5);expected=grade([253/255,0,0],q['clips'][0]['color'])
  assert max(abs(a-v*255) for a,v in zip(actual,expected))<15,(actual,expected)
- print('Native V2 alpha reveals V1, flash, black fades, freeze, last moving frame held, RGB LUT output: full MP4 decode PASS; text:', 'PASS' if core.capabilities().get('text') else 'SKIP (drawtext unavailable)')
+ print('Native V2 alpha, effects, freeze, RGB LUT and browser-rasterized Japanese text: full MP4 decode PASS')

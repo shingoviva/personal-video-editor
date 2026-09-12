@@ -2,7 +2,7 @@ from audio_engine import validate_audio,extent as audio_extent,render_tracks
 """Bounded-memory, non-destructive native media pipeline. Python standard library only."""
 from color_engine import filters as matched_color_filters
 import copy
-import array, bisect, collections, hashlib, json, math, os, pathlib, shutil, statistics, subprocess, threading, time, uuid, struct, zlib
+import array, base64, binascii, bisect, collections, hashlib, json, math, os, pathlib, shutil, statistics, subprocess, threading, time, uuid, struct, zlib
 ROOT=pathlib.Path(os.environ.get('PVE_DATA',str(pathlib.Path.home()/'Library/Application Support/Personal Video Editor')))
 ROOT.mkdir(parents=True,exist_ok=True)
 for name in ('media','cache','exports','projects','logs'): (ROOT/name).mkdir(exist_ok=True)
@@ -26,8 +26,8 @@ def capabilities():
  if not FFMPEG or not FFPROBE:return {'ready':False,'error':'FFmpeg / ffprobe をインストールしてください。'}
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
- ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;text='drawtext' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text,'stabilization':stabilization,'hdr':hdr,'text':text,'videotoolbox':'h264_videotoolbox' in e,'build':'1.7.3','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster
+ return {'ready':ready,'complete':ready and stabilization and hdr and text,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'videotoolbox':'h264_videotoolbox' in e,'build':'1.8.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -35,7 +35,9 @@ def preflight_render(project,clips=None,caps=None):
  if not caps.get('ready'):missing.append('H.264（libx264）')
  if any(c.get('stabilization','OFF')!='OFF' and not c.get('freezeDuration') for c in clips if not c.get('gap')) and not caps.get('stabilization'):missing.append('手ぶれ補正（vidstab）')
  if any(MEDIA.get(c.get('media'),{}).get('hdr') for c in clips if not c.get('gap')) and not caps.get('hdr'):missing.append('HDR→SDR（zscale / tonemap）')
- if any(str(t.get('text','')) for t in project.get('texts',[])) and not caps.get('text'):missing.append('文字描画（drawtext）')
+ texts=[t for t in project.get('texts',[]) if str(t.get('text',''))]
+ raster_ready=caps.get('textRaster') and all(isinstance(t.get('raster'),dict) and str(t['raster'].get('data','')).startswith('data:image/png;base64,') for t in texts)
+ if texts and not (raster_ready or caps.get('drawtext')):missing.append('文字描画（ブラウザ文字画像 / drawtext）')
  if missing:raise ValueError('この編集に必要なFFmpeg機能がありません：'+ '、'.join(missing)+'。Macエンジンの情報をご確認ください。')
  return True
 
@@ -358,6 +360,17 @@ def visible_clips(clips,fps=None):
   windows=quantized
  return windows
 
+def text_raster(text,work,index):
+ """Decode a browser-rasterized text layer with strict size and PNG checks."""
+ raster=text.get('raster') if isinstance(text,dict) else None
+ data=raster.get('data','') if isinstance(raster,dict) else ''
+ prefix='data:image/png;base64,'
+ if not data.startswith(prefix):return None
+ try:payload=base64.b64decode(data[len(prefix):],validate=True)
+ except (ValueError,binascii.Error):raise ValueError('文字画像を読み取れません。もう一度書き出してください。')
+ if len(payload)>8*1024*1024 or not payload.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('文字画像の形式またはサイズが無効です。')
+ path=work/f'text-{index}.png';path.write_bytes(payload);return path
+
 def render(job,project,preview=False,_token=None,_size=None):
  audio_clips=validate_audio(project)
  clips=validate(project);preflight_render(project,clips);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
@@ -461,18 +474,34 @@ def render(job,project,preview=False,_token=None,_size=None):
    graph=f"[1:v]format=rgba,colorchannelmixer=aa={strength},fade=t={direction}:st=0:d={d}:alpha=1,setpts=PTS-STARTPTS+{start}/TB[fx];[0:v][fx]overlay=eof_action=pass:repeatlast=0:enable='gte(t,{start})'[v]"
    run(job,['-i',joined,'-f','lavfi','-t',d,'-i',f'color=c={color}:s={w}x{h}:r={fps}','-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,'-c:v','libx264','-preset','fast','-threads','2','-crf',crf,'-pix_fmt','yuv420p','-c:a','copy',fx],total,.89,0)
    joined=fx
-  out=ROOT/('cache' if preview else 'exports')/(token+'.mp4');bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[]
+  bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[]
   if len(texts)>20:raise ValueError('テキストは最大20個です。')
   for i,t in enumerate(texts):
    text=str(t.get('text',''))[:2000]
    if not text:continue
-   txt=work/f'text-{i}.txt';txt.write_text(text,encoding='utf-8');size=number(t.get('size'),48,8,300)*h/1080;tx=number(t.get('x'),.5,0,1);ty=number(t.get('y'),.85,0,1);op=number(t.get('opacity'),1,0,1);a=number(t.get('start'),0,0,total);b=number(t.get('end'),total,0,total);fade=number(t.get('fade'),0,0,max(0,(b-a)/2));font={'Sans':'Arial','Serif':'Times New Roman','Mono':'Courier New'}.get(t.get('font'),'Arial');align=t.get('align','center');xp=f'w*{tx}' if align=='left' else f'w*{tx}-tw' if align=='right' else f'w*{tx}-tw/2'
+   size=number(t.get('size'),48,8,300)*h/1080;tx=number(t.get('x'),.5,0,1);ty=number(t.get('y'),.85,0,1);op=number(t.get('opacity'),1,0,1);a=number(t.get('start'),0,0,total);b=number(t.get('end'),total,0,total);fade=number(t.get('fade'),0,0,max(0,(b-a)/2));font={'Sans':'Arial','Serif':'Times New Roman','Mono':'Courier New'}.get(t.get('font'),'Arial');align=t.get('align','center')
+   if b<=a:continue
    fi=number(t.get('fadeIn',fade),0,0,max(0,(b-a)/2));fo=number(t.get('fadeOut',fade),0,0,max(0,(b-a)/2));md=number(t.get('motionDuration'),.4,.001,max(.001,(b-a)/2))
    ai=f'(t-{a})/{fi}' if fi else '1';ao=f'({b}-t)/{fo}' if fo else '1';alpha=f'{op}*max(0,min(1,min({ai},{ao})))'
    u=f'clip((t-{a})/{md},0,1)';v=f'clip((t-({b}-{md}))/{md},0,1)';shift=f'.06*(1-({u})*({u})*(3-2*({u}))-({v})*({v})*(3-2*({v})))';yp=f'h*{ty}-th/2'
-   if t.get('motion')=='rise':yp+=f'+h*({shift})'
-   if t.get('motion')=='slide-left':xp+=f'+w*({shift})'
-   final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor=white:fontsize={size}:x='{xp}':y='{yp}':alpha='{alpha}':enable='between(t,{a},{b})'")
+   raster=text_raster(t,work,i)
+   if raster:
+    d=b-a;xp=f'main_w*{tx}' if align=='left' else f'main_w*{tx}-overlay_w' if align=='right' else f'main_w*{tx}-overlay_w/2';yp=f'main_h*{ty}-overlay_h/2'
+    if t.get('motion')=='rise':yp+=f'+main_h*({shift})'
+    if t.get('motion')=='slide-left':xp+=f'+main_w*({shift})'
+    filters=[f"scale=w='min(iw*{h/1080:.9f},{w}*.92)':h=-1:flags=lanczos",'format=rgba',f'colorchannelmixer=aa={op}']
+    if fi:filters.append(f'fade=t=in:st=0:d={fi}:alpha=1')
+    if fo:filters.append(f'fade=t=out:st={max(0,d-fo)}:d={fo}:alpha=1')
+    graph=f"[1:v]{','.join(filters)},setpts=PTS-STARTPTS+{a}/TB[text];[0:v][text]overlay=x='{xp}':y='{yp}':eof_action=pass:repeatlast=0:enable='between(t,{a},{b})'[v]"
+    texted=work/f'texted-{i}.mp4';job['operation']=f'テキスト {i+1}/{len(texts)} を合成中'
+    run(job,['-i',joined,'-loop','1','-framerate',fps,'-t',d,'-i',raster,'-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,'-c:v','libx264','-preset','fast','-threads','2','-crf',crf,'-pix_fmt','yuv420p','-c:a','copy',texted],total,.89,0)
+    joined=texted
+   elif capabilities().get('drawtext'):
+    txt=work/f'text-{i}.txt';txt.write_text(text,encoding='utf-8');xp=f'w*{tx}' if align=='left' else f'w*{tx}-tw' if align=='right' else f'w*{tx}-tw/2'
+    if t.get('motion')=='rise':yp+=f'+h*({shift})'
+    if t.get('motion')=='slide-left':xp+=f'+w*({shift})'
+    final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor=white:fontsize={size}:x='{xp}':y='{yp}':alpha='{alpha}':enable='between(t,{a},{b})'")
+  out=ROOT/('cache' if preview else 'exports')/(token+'.mp4')
   args=['-i',joined];bg=MEDIA.get(bgm.get('media'));graph=[]
   if bg:
    args+=['-stream_loop','-1','-i',bg['path']];vol=number(bgm.get('volume'),.3,0,2);fi=number(bgm.get('fadeIn'),0,0,total/2);fo=number(bgm.get('fadeOut'),0,0,total/2)

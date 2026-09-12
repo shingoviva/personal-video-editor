@@ -1,11 +1,12 @@
 import {audioWindows,trackGain} from './audio-timeline.js';
 import {Input,ALL_FORMATS,BlobSource,CanvasSink,AudioSampleSink,VideoSampleSink,Output,Mp4OutputFormat,StreamTarget,CanvasSource,AudioSampleSource,AudioSample,Quality,canEncodeVideo,canEncodeAudio} from './vendor/mediabunny.mjs';
-import {clipAlpha,effectAlpha,textPose} from './creative.js';
+import {clipAlpha,effectAlpha} from './creative.js';
 import {imageBitmap} from './image-media.js';
 import {renderer} from './preview.js';
 import {sequence,visibleSequence,timing,sourceOffset} from './model.js';
 import {outputSettings,sourceTime,gainAt,held,mixWindow,limitStereo} from './mobile-model.js';
 import {translation,smoothPath,correctionAt} from './mobile-stabilize.js';
+import {drawTextCanvas} from './text-render.js';
 let cancelled=false,limiter={gain:1};
 const check=()=>{if(cancelled)throw new DOMException('書き出しを中止しました。','AbortError')};
 const progress=(operation,value)=>postMessage({type:'progress',operation,value});
@@ -31,7 +32,6 @@ async function stabilize(track,c,onProgress){
  for await(const frame of sink.canvasesAtTimestamps(stamps())){check();if(!frame)continue;const pixels=frame.canvas.getContext('2d').getImageData(0,0,48,48).data,gray=new Float32Array(48*48);for(let i=0;i<gray.length;i++)gray[i]=.299*pixels[4*i]+.587*pixels[4*i+1]+.114*pixels[4*i+2];if(last){const [dx,dy]=translation(last,gray);x+=dx;y+=dy}points.push({time:frame.timestamp,x,y});last=gray;if(points.length%24===0)onProgress(points.length/count);}
  return smoothPath(points,c.stabilization);
 }
-function drawText(ctx,p,t,w,h){for(const text of p.texts){const pose=textPose(text,t);if(!pose.alpha)continue;ctx.save();ctx.fillStyle='#fff';ctx.globalAlpha=pose.alpha;const size=text.size*h/1080;ctx.font=`${size}px ${text.font==='Serif'?'Georgia':text.font==='Mono'?'monospace':'Arial'}`;ctx.textAlign=text.align||'center';ctx.textBaseline='middle';const lines=text.text.split('\n');lines.forEach((line,i)=>ctx.fillText(line,pose.x*w,pose.y*h+(i-(lines.length-1)/2)*size*1.1,w*.96));ctx.restore();}}
 async function frameReader(row,res,cfg,start=row.start){
  const c=row.clip;let still,iterator,current,next,pathData,blend,stable;
  try{
@@ -78,7 +78,7 @@ async function render(p,files,preview,outputPath){limiter={gain:1};
  const frame=await sessions[k].reader.frame(t);painter.draw(frame,row.clip,`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;ctx.drawImage(processed,0,0);ctx.globalAlpha=1;
  }
  for(const e of p.effects||[]){const alpha=effectAlpha(e,t);if(alpha){ctx.globalAlpha=alpha;ctx.fillStyle=e.type==='flash'?'#fff':'#000';ctx.fillRect(0,0,cfg.width,cfg.height)}}ctx.globalAlpha=1;
- drawText(ctx,p,t,cfg.width,cfg.height);await videoSource.add(t,Math.min(1/cfg.fps,cfg.duration-t));frameIndex++;
+ for(const text of p.texts)drawTextCanvas(ctx,text,t,cfg.width,cfg.height);await videoSource.add(t,Math.min(1/cfg.fps,cfg.duration-t));frameIndex++;
  const target=Math.min(cfg.duration,frameIndex/cfg.fps);while(audioTime<target-1e-8){const end=Math.min(cfg.duration,audioTime+.25),sample=await mixAudio(rows,resources,p,audioTime,end);if(sample){try{await audioSource.add(sample)}finally{sample.close()}}audioTime=end;}
  if(frameIndex%5===0)progress('MP4を書き出し中',frameIndex/cfg.frames*.95);
  }

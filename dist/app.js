@@ -11,6 +11,7 @@ import {bindTimeline} from './timeline-gestures.js';
 import {bindTimelinePinch} from './timeline-zoom.js';
 import {bindOverlayTimeline,snapOverlayStart} from './overlay-timeline.js';
 import {bindTimelineMarquee} from './timeline-selection.js';
+import {bindNativeShell} from './native-shell.js';
 import {bindStageTransform} from './stage-transform.js';
 import {motionTransform} from './motion-transform.js';
 import {timeAtTimelinePoint,canSplitTimelineRow,contextMenuPosition} from './timeline-context.js';
@@ -36,6 +37,7 @@ let loadGeneration=0,loadController=null,loadPromise=null,operationAbort=null,up
 var effectNames={flash:'CAMERA FLASH','black-in':'BLACK → IMAGE','black-out':'IMAGE → BLACK'};
 let lookThumbPainter=null,lookThumbCanvas=null;
 let selectedEffect=null,selectedText=null,draggedEffectType=null,lookBypass=false;const lowerPreviews=[new LayerPreview($('#lowerCanvas')),new LayerPreview($('#middleCanvas'))];const audioPreview=new AudioPreview(),textPreview=new TextPreview($('#textOverlay'));let selectedAudio=null,activeAudioLayer=0;
+bindNativeShell({timeline:$('#timelineScroll')});
 const video=$('#sourceVideo'),canvas=$('#previewCanvas'),bgmAudio=$('#bgmAudio');let painter;try{painter=renderer(canvas)}catch(e){console.warn(e)}
 try{const old=localStorage.getItem('pve.autosave.v1');if(old)P=sanitize(JSON.parse(old))}catch{}
 migrateBgm(P);selected=P.clips[0]?.id||null;

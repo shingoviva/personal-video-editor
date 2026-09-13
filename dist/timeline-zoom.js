@@ -31,5 +31,9 @@ export function bindTimelinePinch({root,getZoom,setZoom,render,status=()=>{},min
  },{capture:true,passive:false});
  const end=e=>{if(!pointers.has(e.pointerId))return;pointers.delete(e.pointerId);if(pointers.size<2)gesture=null};
  root.addEventListener('pointerup',end,{capture:true});root.addEventListener('pointercancel',end,{capture:true});
+ root.addEventListener('wheel',e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();const rect=root.getBoundingClientRect(),point=e.clientX-rect.left,contentWidth=Math.max(root.scrollWidth,root.clientWidth),anchor=(root.scrollLeft+point)/contentWidth,next=clamp(getZoom()*Math.exp(-e.deltaY*.01),min,max);setZoom(next);render();root.scrollLeft=anchoredScroll(anchor,root.scrollWidth,point,root.clientWidth);status('トラックパッドでタイムラインの細かさを調整')},{passive:false});
+ let safariGesture=null;root.addEventListener('gesturestart',e=>{e.preventDefault();const rect=root.getBoundingClientRect(),point=(e.clientX??rect.left+root.clientWidth/2)-rect.left,contentWidth=Math.max(root.scrollWidth,root.clientWidth);safariGesture={zoom:getZoom(),point,anchor:(root.scrollLeft+point)/contentWidth}},{passive:false});
+ root.addEventListener('gesturechange',e=>{e.preventDefault();if(!safariGesture)return;setZoom(clamp(safariGesture.zoom*(e.scale||1),min,max));render();root.scrollLeft=anchoredScroll(safariGesture.anchor,root.scrollWidth,safariGesture.point,root.clientWidth);status('トラックパッドでタイムラインの細かさを調整')},{passive:false});
+ root.addEventListener('gestureend',e=>{e.preventDefault();safariGesture=null},{passive:false});
  return()=>{pointers.clear();gesture=null};
 }

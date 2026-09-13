@@ -21,4 +21,4 @@ textElement.onpointerdown(event(100));textElement.onpointermove(event(297));text
 assert.equal(text.start,4);assert.equal(text.end,5);
 assert.equal(begins,2);assert.equal(finishes,2);assert.equal(cancels,0);
 
-console.log('FX/Text timeline drag: arbitrary placement, playhead/edit-point snap, Alt bypass and duration preservation PASS');
+console.log('FX/Text timeline drag: arbitrary placement, playhead/edit-point snap, duration preservation and magnetic placement PASS');

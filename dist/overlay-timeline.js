@@ -17,26 +17,26 @@ export function snapOverlayStart(value,span,{duration,pixels,enabled=true,bypass
  return{start:clamp(start,0,limit),snapped,target};
 }
 
-export function bindOverlayTimeline({root,effects=[],texts=[],duration,targets,snap,select,begin,finish,cancel,preview}){
+export function bindOverlayTimeline({root,effects=[],texts=[],duration,targets,snap,select,begin,finish,cancel,preview,duplicate}){
  const pixels=Math.max(1,root.getBoundingClientRect().width),secondsPerPixel=Math.max(duration,.001)/pixels;
  for(const el of root.querySelectorAll('[data-fx],[data-text-chip]')){
   el.onpointerdown=event=>{
    if(event.button!==0)return;
-   const kind=el.dataset.fx?'effect':'text',item=(kind==='effect'?effects:texts).find(value=>value.id===(el.dataset.fx||el.dataset.textChip));
+   const kind=el.dataset.fx?'effect':'text';let item=(kind==='effect'?effects:texts).find(value=>value.id===(el.dataset.fx||el.dataset.textChip));
    if(!item)return;
    const origin=structuredClone(item),originStart=kind==='effect'?origin.start:origin.start,span=kind==='effect'?origin.duration:origin.end-origin.start,x=event.clientX;
-   let moved=false,lastResult={snapped:false,target:null};select(kind,item.id);el.setPointerCapture(event.pointerId);
+   let moved=false,lastResult={snapped:false,target:null};select(kind,item.id,event);el.setPointerCapture(event.pointerId);
    el.onpointermove=move=>{
     if(!moved&&Math.abs(move.clientX-x)<5)return;
-    if(!moved){begin();moved=true;el.classList.add('dragging')}
-    lastResult=snapOverlayStart(originStart+(move.clientX-x)*secondsPerPixel,span,{duration,pixels,enabled:snap(),bypass:move.altKey,targets:targets(item,kind)});
+    if(!moved){begin();if(event.altKey&&duplicate){item=duplicate(item,kind)||item;select(kind,item.id,event)}moved=true;el.classList.add('dragging')}
+    lastResult=snapOverlayStart(originStart+(move.clientX-x)*secondsPerPixel,span,{duration,pixels,enabled:snap(),targets:targets(item,kind)});
     item.start=lastResult.start;if(kind==='text')item.end=item.start+span;
     el.style.left=item.start/Math.max(duration,.001)*100+'%';preview(item,kind,lastResult);
    };
    const cleanup=()=>{el.classList.remove('dragging');el.onpointermove=null;el.onpointerup=null;el.onpointercancel=null;el.onlostpointercapture=null};
    el.onpointerup=()=>{cleanup();if(moved)finish(item,kind,lastResult)};
-   el.onpointercancel=()=>{cleanup();if(moved){Object.assign(item,origin);cancel()}};
-   el.onlostpointercapture=()=>{cleanup();if(moved){Object.assign(item,origin);cancel()}};
+   el.onpointercancel=()=>{cleanup();if(moved)cancel()};
+   el.onlostpointercapture=()=>{cleanup();if(moved)cancel()};
   };
  }
 }

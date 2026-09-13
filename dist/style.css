@@ -187,3 +187,16 @@ button,input,select,textarea,.context-menu button{font-size:var(--type-body)}
 .context-menu{width:210px}.context-menu button{padding:8px 10px}.context-time{font:var(--type-menu) var(--mono)}
 @media(max-width:900px){.top-history button span{display:none}.project-heading span{display:none}.engine-pill{display:none}}
 @media(max-width:800px){.topbar{height:47px;padding-inline:7px;gap:4px}.brand{margin-right:2px}.project-heading{gap:0}.project-heading input{width:110px;font-size:var(--type-body)}.top-history{padding-right:2px}.top-history button{padding:0 5px}.top-command{height:31px;padding:0 8px}.top-actions{gap:2px}.media-panel{overflow:hidden!important}.media-panel .media-list{display:block;min-height:0;overflow-y:auto;overflow-x:hidden}.media-panel .asset-card{width:100%;min-width:0}.media-panel .intent-box,.media-panel .media-bottom{display:none}.media-panel .media-drop{display:flex}.media-guide{display:flex}.asset-sort{display:none}}
+
+/* Direct manipulation and placement feedback */
+.picture{touch-action:none;cursor:move}
+.transform-guides{position:absolute;inset:0;z-index:5;pointer-events:none}
+.transform-guides i,.transform-guides b{display:none;position:absolute;background:#dce9a9;box-shadow:0 0 9px #dce9a988}
+.transform-guides i{left:50%;top:0;bottom:0;width:1px}
+.transform-guides b{top:50%;left:0;right:0;height:1px}
+.transform-guides.snap-x i,.transform-guides.snap-y b{display:block}
+.spacing-guide{position:absolute;top:34px;right:12px;z-index:14;padding:3px 6px;border:1px solid #9ab36c;background:#182014;color:#dce9a9;border-radius:4px;font:9px var(--mono);letter-spacing:.08em;pointer-events:none}
+.asset-actions{grid-template-columns:1fr 34px 34px}
+.asset-card.active{box-shadow:0 0 0 1px var(--accent),0 8px 20px #0005}
+.editable-audio.drop-target{background:#dce9a914;box-shadow:inset 0 0 0 1px var(--accent)}
+input[type=color]{width:100%;height:34px;padding:3px;border:1px solid var(--border);background:#0d100e;border-radius:5px}

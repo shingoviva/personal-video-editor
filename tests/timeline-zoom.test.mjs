@@ -13,7 +13,7 @@ class FakeTimeline{
  addEventListener(name,handler){(this.handlers[name]??=[]).push(handler)}
  getBoundingClientRect(){return{left:20}}
  setPointerCapture(){}
- emit(name,event){for(const handler of this.handlers[name]??[])handler({...event,preventDefault(){},stopPropagation(){}})}
+ emit(name,event){for(const handler of this.handlers[name]??[])handler({...event,preventDefault:event.preventDefault||(()=>{}),stopPropagation:event.stopPropagation||(()=>{})})}
 }
 const root=new FakeTimeline(),cancelled=[],captured=[];let zoom=2,renders=0,message='';
 const target=id=>({onpointercancel:event=>cancelled.push(event.pointerId),releasePointerCapture:id=>captured.push(id)});
@@ -27,4 +27,6 @@ assert.deepEqual(cancelled,[11,22]);
 assert.deepEqual(captured,[11,22]);
 assert.match(message,/ピンチ/);
 assert.equal(root.scrollLeft,200);
+let wheelPrevented=false;root.emit('wheel',{ctrlKey:true,metaKey:false,deltaY:-10,clientX:120,preventDefault(){wheelPrevented=true}});assert.ok(zoom>3);assert.ok(renders>1);assert.equal(wheelPrevented,true);
+const wheelZoom=zoom;root.emit('gesturestart',{clientX:220,scale:1});root.emit('gesturechange',{clientX:220,scale:.5});root.emit('gestureend',{clientX:220,scale:.5});assert.ok(zoom<wheelZoom);
 console.log('Timeline pinch zoom: limits, pointer binding and focal-point scroll anchoring PASS');

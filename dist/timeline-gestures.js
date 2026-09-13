@@ -3,7 +3,7 @@ import {sourceLimit} from './assets.js';
 
 // A pointer gesture is a single history transaction, including touch/pen.
 // Only geometry changes during dragging; no thumbnail DOM is rebuilt.
-export function bindTimeline({root,rows,duration,select,begin,finish,cancel,preview,media,snap,getLayer}){
+export function bindTimeline({root,rows,duration,select,begin,finish,cancel,preview,media,snap,getLayer,snapTargets=()=>[]}){
  const pixels=root.getBoundingClientRect().width;
  const secondsPerPixel=Math.max(duration,.001)/Math.max(pixels,1);
  for(const el of root.querySelectorAll('[data-clip]')){
@@ -18,8 +18,8 @@ export function bindTimeline({root,rows,duration,select,begin,finish,cancel,prev
     if(!moved&&Math.hypot(ev.clientX-x,ev.clientY-y)<5)return;
     if(!moved){begin();moved=true;el.classList.add('dragging')}
     let delta=(ev.clientX-x)*secondsPerPixel;
-    const frame=1/30,targets=[0,...rows.filter(r=>r!==row).flatMap(r=>[r.start,r.end])];
-    const snapped=t=>{t=Math.round(t/frame)*frame;if(snap()&&!ev.altKey){let best=targets.find(a=>Math.abs(a-t)<secondsPerPixel*8);if(best!==undefined)t=best}return Math.max(0,t)};
+    const frame=1/30,targets=[0,...snapTargets(),...rows.filter(r=>r!==row).flatMap(r=>[r.start,r.end])];let didSnap=false;
+    const snapped=t=>{t=Math.round(t/frame)*frame;didSnap=false;if(snap()&&!ev.altKey){let best=targets.reduce((found,a)=>Math.abs(a-t)<Math.abs((found??Infinity)-t)?a:found,undefined);if(best!==undefined&&Math.abs(best-t)<=secondsPerPixel*8){t=best;didSnap=true}}return Math.max(0,t)};
     const c=row.clip;
     if(!edge){
      c.start=snapped(row.start+delta);c.layer=getLayer(ev.clientY)??row.layer;
@@ -39,7 +39,7 @@ export function bindTimeline({root,rows,duration,select,begin,finish,cancel,prev
     }
     el.style.left=c.start/Math.max(duration,.001)*100+'%';
     el.style.width=timing(c).duration/Math.max(duration,.001)*100+'%';
-    const now=performance.now();if(now-lastPreview>100){lastPreview=now;preview(c,edge)}
+    const now=performance.now();if(now-lastPreview>100){lastPreview=now;preview(c,edge,didSnap)}
    };
    const cleanup=()=>{el.onpointermove=null;el.onpointerup=null;el.onpointercancel=null;el.onlostpointercapture=null};
    el.onpointerup=ev=>{cleanup();if(moved)finish();else{const t=row.start+clamp((ev.clientX-el.getBoundingClientRect().left)/Math.max(el.clientWidth,1),0,1)*row.duration;finish(t,false)}};

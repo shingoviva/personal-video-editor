@@ -6,7 +6,7 @@ with tempfile.TemporaryDirectory(prefix='pve-prores-') as tmp:
  if not core.capabilities().get('prores'):
   print('ProRes test SKIP: prores_ks unavailable');raise SystemExit(0)
  src=pathlib.Path(tmp)/'gradient.mov'
- subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','lavfi','-i','gradients=size=320x180:rate=30:c0=0x101018:c1=0x9098a8:x0=0:y0=0:x1=320:y1=180','-f','lavfi','-i','sine=frequency=330:sample_rate=48000','-t','0.6','-c:v','prores_ks','-profile:v','lt','-pix_fmt','yuv422p10le','-c:a','pcm_s24le',str(src)],check=True)
+ subprocess.run(['ffmpeg','-hide_banner','-loglevel','error','-y','-f','lavfi','-i','gradients=size=320x180:rate=30:c0=0x000000:c1=0xffffff:x0=0:y0=0:x1=320:y1=180','-f','lavfi','-i','sine=frequency=330:sample_rate=48000','-t','0.6','-c:v','prores_ks','-profile:v','lt','-pix_fmt','yuv422p10le','-c:a','pcm_s24le',str(src)],check=True)
  media=core.inspect(src,'prores-source','gradient.mov')
  clip={'id':'clip','media':media['id'],'in':0,'out':.5,'speed':1,'endSpeed':1,'curve':'constant','scale':1,'x':.5,'y':.5,'stabilization':'OFF','interpolation':'duplicate','color':{'exposure':.13,'contrast':7,'highlights':-4,'shadows':3,'temperature':2,'tint':1,'saturation':5,'vibrance':4},'audio':{'volume':1}}
  width,height=96,28;rows=b''.join(b'\0'+bytes((255,255,255,210))*width for _ in range(height));chunk=lambda kind,data:struct.pack('!I',len(data))+kind+data+struct.pack('!I',zlib.crc32(kind+data)&0xffffffff);png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!2I5B',width,height,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(rows))+chunk(b'IEND',b'')

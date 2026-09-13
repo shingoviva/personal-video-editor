@@ -1,8 +1,14 @@
-# PERSONAL VIDEO EDITOR — V1 Preview · 1.9.0
+# PERSONAL VIDEO EDITOR — V1 Preview · 1.9.1
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
 **このビルドは動作する検証版です。H.264/SDR実写素材、`IMG_7917.mov` のHEVC/SDR/VFR実写素材、合成素材でMac処理を検証し、ChromeでUI操作を確認しました。Apple Silicon・Safari・実写HDRの受け入れ試験は未実施です。仕様書のV1完成を宣言する版ではありません。**
+
+## 1.9.1 — MAGNETIC FX TIMELINE
+
+- FXパレットのCamera Flash／Black FadeをFXトラックへドラッグし、任意時刻へ直接配置できます。配置済みFXとテキストもタイムライン上で横方向に移動できます。
+- 「吸着」が有効な間は、再生ヘッド、映像・音声クリップの端、ほかのFX・テキストの端へ8画素以内で吸着します。アイテムの先頭と末尾の両方を判定し、Altキーで一時的に解除できます。
+- 素材のドラッグ配置と通常クリップの移動も再生ヘッドへ吸着し、吸着位置をタイムライン全高のガイドで表示します。
 
 ## 1.9.0 — ENGINE / MEDIA WORKFLOW
 

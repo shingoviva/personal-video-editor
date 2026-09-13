@@ -27,7 +27,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.10.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.11.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -437,7 +437,14 @@ def render(job,project,preview=False,_token=None,_size=None):
     vf+=['select=eq(n\\,0)']
    if m.get('kind')=='image':vf+=['format=rgba','premultiply=inplace=1','format=rgb24']
    scale=number(c.get('scale'),1,1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1);ar=w/h
-   vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/{scale}/2)*2':h='trunc(min(ih,iw/{ar})/{scale}/2)*2':x='(iw-ow)*{x}':y='(ih-oh)*{y}'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
+   preset=c.get('motionPreset','none');amount=number(c.get('motionAmount'),.12,0,.5);progress=f'min(max(t/{max(source_duration,.001):.9f},0),1)';ease=f'({progress})*({progress})*(3-2*({progress}))';scale_expr=str(scale);x_expr=str(x);y_expr=str(y)
+   if preset=='push-in':scale_expr=f'min(3,{scale}*(1+{amount}*({ease})))'
+   elif preset=='pull-out':scale_expr=f'min(3,{scale}*(1+{amount}*(1-({ease}))))'
+   elif preset=='pan-left':x_expr=f'max(0,min(1,{x}+{amount}*(.5-({ease}))))'
+   elif preset=='pan-right':x_expr=f'max(0,min(1,{x}+{amount}*(({ease})-.5)))'
+   elif preset=='pan-up':y_expr=f'max(0,min(1,{y}+{amount}*(.5-({ease}))))'
+   elif preset=='pan-down':y_expr=f'max(0,min(1,{y}+{amount}*(({ease})-.5)))'
+   vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/({scale_expr})/2)*2':h='trunc(min(ih,iw/{ar})/({scale_expr})/2)*2':x='(iw-ow)*({x_expr})':y='(ih-oh)*({y_expr})'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
    grade=color_filters(c.get('color',{}),number(c.get('lookAmount'),1,0,1.5));vf+=(['format=gbrpf32le']+grade if grade else []);vf+=['settb=AVTB','setpts=PTS-STARTPTS']
    # Use the same 32-piece integral as the browser timeline. Source PTS handles VFR.
    expr=f'{duration:.9f}'

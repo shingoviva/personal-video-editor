@@ -7,6 +7,7 @@ import {sequence,visibleSequence,timing,sourceOffset} from './model.js';
 import {outputSettings,sourceTime,gainAt,held,mixWindow,limitStereo} from './mobile-model.js';
 import {translation,smoothPath,correctionAt} from './mobile-stabilize.js';
 import {drawTextCanvas} from './text-render.js';
+import {motionTransform} from './motion-transform.js';
 let cancelled=false,limiter={gain:1};
 const check=()=>{if(cancelled)throw new DOMException('書き出しを中止しました。','AbortError')};
 const progress=(operation,value)=>postMessage({type:'progress',operation,value});
@@ -75,7 +76,7 @@ async function render(p,files,preview,outputPath){limiter={gain:1};
  const row=active[k],alpha=clipAlpha(row,t),occluded=active.some((r,j)=>j>k&&clipAlpha(r,t)>=1);
  if(!row||occluded){if(sessions[k]){await sessions[k].reader.close();sessions[k]=null}continue}
  if(sessions[k]?.row!==row){if(sessions[k])await sessions[k].reader.close();sessions[k]={row,reader:await frameReader(row,resources.get(row.clip.media),cfg,t)}}
- const frame=await sessions[k].reader.frame(t);painter.draw(frame,row.clip,`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;ctx.drawImage(processed,0,0);ctx.globalAlpha=1;
+ const frame=await sessions[k].reader.frame(t);painter.draw(frame,motionTransform(row.clip,t-row.start,row.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;ctx.drawImage(processed,0,0);ctx.globalAlpha=1;
  }
  for(const e of p.effects||[]){const alpha=effectAlpha(e,t);if(alpha){ctx.globalAlpha=alpha;ctx.fillStyle=e.type==='flash'?'#fff':'#000';ctx.fillRect(0,0,cfg.width,cfg.height)}}ctx.globalAlpha=1;
  for(const text of p.texts)drawTextCanvas(ctx,text,t,cfg.width,cfg.height);await videoSource.add(t,Math.min(1/cfg.fps,cfg.duration-t));frameIndex++;

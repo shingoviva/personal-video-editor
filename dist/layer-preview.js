@@ -3,6 +3,7 @@ import {StillPreview} from './image-media.js';
 import {waitForMedia} from './media-state.js';
 import {sourceOffset,timing} from './model.js';
 import {clipAlpha} from './creative.js';
+import {motionTransform} from './motion-transform.js';
 // A second decoder exists only while an upper layer reveals the lower picture.
 export class LayerPreview{
  constructor(canvas){this.canvas=canvas;this.painter=renderer(canvas);this.still=new StillPreview();this.video=document.createElement('video');this.video.muted=true;this.video.playsInline=true;this.video.preload='auto';this.video.onseeked=()=>this.paint();this.video.onloadeddata=()=>this.paint();}
@@ -22,7 +23,7 @@ export class LayerPreview{
    this.paint();
   }catch{this.painter?.black()}finally{this.busy=false;if(this.pending){const next=this.pending;this.pending=null;this.update(...next)}}
  }
- paint(){const s=this.state;if(!s?.row)return;const source=s.m.kind==='image'?this.still.bitmap:this.video;if(source)this.painter?.draw(source,s.row.clip,s.aspect,s.compare)}
+ paint(){const s=this.state;if(!s?.row)return;const source=s.m.kind==='image'?this.still.bitmap:this.video;if(source)this.painter?.draw(source,motionTransform(s.row.clip,s.t-s.row.start,s.row.duration),s.aspect,s.compare)}
  clear(){this.state=null;this.pending=null;this.canvas.style.opacity='0';this.video.pause();this.controller?.abort();if(this.url){this.video.removeAttribute('src');this.video.load();this.url=null}this.still.clear();}
  pause(){this.video.pause()}
  dispose(){this.clear();this.painter?.dispose()}

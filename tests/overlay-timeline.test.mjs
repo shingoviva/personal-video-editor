@@ -21,4 +21,12 @@ textElement.onpointerdown(event(100));textElement.onpointermove(event(297));text
 assert.equal(text.start,4);assert.equal(text.end,5);
 assert.equal(begins,2);assert.equal(finishes,2);assert.equal(cancels,0);
 
-console.log('FX/Text timeline drag: arbitrary placement, playhead/edit-point snap, duration preservation and magnetic placement PASS');
+const trimEffect={id:'trim',start:1,duration:2},trimElement=makeElement({fx:'trim'}),trimRoot={getBoundingClientRect:()=>({width:1000}),querySelectorAll:()=>[trimElement]};
+bindOverlayTimeline({root:trimRoot,effects:[trimEffect],texts:[],duration:10,targets:()=>[],snap:()=>false,select(){},begin(){},finish(){},cancel(){},preview(){}});
+const trimEvent=(x,edge)=>({...event(x),target:{closest:()=>edge?{dataset:{overlayEdge:edge}}:null}});
+trimElement.onpointerdown(trimEvent(100,'out'));trimElement.onpointermove(trimEvent(200,'out'));trimElement.onpointerup(trimEvent(200,'out'));
+assert.ok(Math.abs(trimEffect.duration-3)<1e-8);
+trimElement.onpointerdown(trimEvent(100,'in'));trimElement.onpointermove(trimEvent(150,'in'));trimElement.onpointerup(trimEvent(150,'in'));
+assert.ok(Math.abs(trimEffect.start-1.5)<1e-8);assert.ok(Math.abs(trimEffect.duration-2.5)<1e-8);
+
+console.log('FX/Text timeline drag: arbitrary placement, edge trim, duration preservation and magnetic placement PASS');

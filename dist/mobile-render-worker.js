@@ -8,6 +8,7 @@ import {outputSettings,sourceTime,gainAt,held,mixWindow,limitStereo} from './mob
 import {translation,smoothPath,correctionAt} from './mobile-stabilize.js';
 import {drawTextCanvas} from './text-render.js';
 import {motionTransform} from './motion-transform.js';
+import {frameAtTimestamp} from './frame-source.js';
 let cancelled=false,limiter={gain:1};
 const check=()=>{if(cancelled)throw new DOMException('書き出しを中止しました。','AbortError')};
 const progress=(operation,value)=>postMessage({type:'progress',operation,value});
@@ -34,33 +35,34 @@ async function stabilize(track,c,onProgress){
  return smoothPath(points,c.stabilization);
 }
 async function frameReader(row,res,cfg,start=row.start){
- const c=row.clip;let still,iterator,current,next,pathData,blend,stable;
+ const c=row.clip;let still,pathData,blend,stable;const frameState={frame:null,source:-1};
  try{
  if(res.imageFile){still=await imageBitmap(res.imageFile,res.metadata,Math.min(8192,Math.max(cfg.width,cfg.height)*(c.scale||1)));return{frame:async()=>still,close:async()=>still.close()}}
  if(!res.video)throw Error('映像トラックがありません。');
  if(c.stabilization!=='OFF'&&!c.freezeDuration){progress('手ぶれの動きを解析中',0);pathData=await stabilize(res.video,c,()=>{});}
  const scale=Math.min(1,Math.max(cfg.width/res.video.displayWidth,cfg.height/res.video.displayHeight)*(c.scale||1)*(pathData?.scale||1));
  const sw=Math.max(2,Math.round(res.video.displayWidth*scale)),sh=Math.max(2,Math.round(res.video.displayHeight*scale)),sink=new CanvasSink(res.video,{width:sw,height:sh,fit:'fill',poolSize:3});
- current=await sink.getCanvas(sourceTime(row,start));
- if(!c.freezeDuration){iterator=sink.canvases(Math.max(0,sourceTime(row,start)-.1),c.out)[Symbol.asyncIterator]();next=await iterator.next()}
  blend=canvas(sw,sh);const bc=blend.getContext('2d',{alpha:false});if(pathData)stable=canvas(sw,sh);
  return{async frame(t){
  const source=sourceTime(row,t);
- while(next&&!next.done&&next.value.timestamp<=source+1e-8){current=next.value;next=await iterator.next()}
- if(!current)current=next?.value;if(!current)throw Error('映像フレームを読み込めません。');
+ // CanvasSink recycles iterator canvases. Keeping one of those canvases across
+ // encoder awaits can therefore repeat the same picture. A timestamp lookup
+ // gives each output timestamp the correct decoded VFR frame before painting.
+ const current=await frameAtTimestamp(sink,source,frameState);
+ if(!current)throw Error('映像フレームを読み込めません。');
  bc.globalAlpha=1;bc.drawImage(current.canvas,0,0);
- if(c.interpolation==='blend'&&next&&!next.done&&next.value.timestamp>current.timestamp){bc.globalAlpha=Math.max(0,Math.min(1,(source-current.timestamp)/(next.value.timestamp-current.timestamp)));bc.drawImage(next.value.canvas,0,0);bc.globalAlpha=1}
+ if(c.interpolation==='blend'&&!c.freezeDuration){const following=await sink.getCanvas(Math.min(c.out-1e-7,source+1/cfg.fps));if(following&&following.timestamp>current.timestamp){bc.globalAlpha=Math.max(0,Math.min(1,(source-current.timestamp)/(following.timestamp-current.timestamp)));bc.drawImage(following.canvas,0,0);bc.globalAlpha=1}}
  if(stable){const sc=stable.getContext('2d',{alpha:false}),corr=correctionAt(pathData,source);sc.save();sc.fillStyle='#000';sc.fillRect(0,0,sw,sh);sc.translate(sw/2+corr.x*sw,sh/2+corr.y*sh);sc.scale(pathData.scale,pathData.scale);sc.drawImage(blend,-sw/2,-sh/2);sc.restore()}
  return stable||blend;
- },async close(){await iterator?.return?.();blend.width=blend.height=1;if(stable)stable.width=stable.height=1}};
- }catch(e){still?.close();await iterator?.return?.();throw e}
+ },async close(){blend.width=blend.height=1;if(stable)stable.width=stable.height=1}};
+ }catch(e){still?.close();throw e}
 }
 async function render(p,files,preview,outputPath){limiter={gain:1};
- const cfg=outputSettings(p,preview),rows=visibleSequence(p),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
+ const cfg=outputSettings(p,preview),hidden=layer=>!!p.videoTracks?.[layer]?.hidden,videoProject={...p,clips:p.clips.filter(c=>!hidden(c.layer||0)),audioClips:[]},rows=visibleSequence(videoProject),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');
  if(!await canEncodeVideo('avc',{width:cfg.width,height:cfg.height,bitrate:cfg.bitrate})||!await canEncodeAudio('aac',{sampleRate:48000,numberOfChannels:2}))throw Error('選択したH.264/AAC設定に端末が対応していません。1080p・30fpsをお試しください。');
- const needed=new Set([...p.clips,...p.audioClips||[]].filter(c=>!c.gap).map(c=>c.media));if(p.bgm.media)needed.add(p.bgm.media);
+ const needed=new Set([...videoProject.clips,...p.audioClips||[]].filter(c=>!c.gap).map(c=>c.media));if(p.bgm.media)needed.add(p.bgm.media);
  for(const id of needed){check();const file=files.find(x=>x.id===id)?.file;if(!file)throw Error('元素材を再リンクしてください。');const metadata=p.media.find(m=>m.id===id);if(metadata?.kind==='image'){resources.set(id,{imageFile:file,metadata,audio:null,duration:5});continue}const input=open(file);activeInputs.push(input);const video=await input.getPrimaryVideoTrack(),audio=await input.getPrimaryAudioTrack();if(video&&p.clips.some(c=>c.media===id)){if(!await video.canDecode())throw Error(file.name+' の映像を端末でデコードできません。');const color=await video.getColorSpace();if(await video.hasHighDynamicRange()||['smpte2084','arib-std-b67'].includes(color.transfer))throw Error(file.name+' はHDRです。端末版の正確なトーンマッピングは未対応のため停止しました。SDR素材、またはMac版をご利用ください。');}
  const needsAudio=(p.audioClips||[]).some(c=>c.media===id)||id===p.bgm.media||rows.some(r=>r.clip.media===id&&!r.clip.audio?.mute&&r.clip.audio?.volume);if(audio&&needsAudio&&audio.numberOfChannels>2)throw Error('端末版の音声はモノラル・ステレオのみ対応しています。');if(audio&&needsAudio&&!await audio.canDecode())throw Error(file.name+' の音声をデコードできません。');resources.set(id,{input,video,audio:needsAudio?audio:null,duration:await input.computeDuration()});}
  check();const estimate=await navigator.storage.estimate();const expectedBytes=(cfg.bitrate+192000)*cfg.duration/8;if(estimate.quota&&estimate.quota-estimate.usage<expectedBytes*1.2)throw Error('書き出し用の空き容量が不足しています。画質か解像度を下げてください。');root=await navigator.storage.getDirectory();root=await root.getDirectoryHandle('pve-renders',{create:true});path=outputPath;fileHandle=await root.getFileHandle(path,{create:true});handle=await fileHandle.createSyncAccessHandle();
@@ -68,7 +70,7 @@ async function render(p,files,preview,outputPath){limiter={gain:1};
  output=new Output({format:new Mp4OutputFormat({fastStart:'reserve'}),target:new StreamTarget(stream,{chunked:true,chunkSize:1024*1024})});
  const picture=canvas(cfg.width,cfg.height),processed=canvas(cfg.width,cfg.height),ctx=picture.getContext('2d',{alpha:false});painter=renderer(processed,{width:cfg.width,height:cfg.height,preserve:true});if(!painter)throw Error('映像処理用GPUを利用できません。');
  const videoSource=new CanvasSource(picture,{codec:'avc',quality:new Quality({bitrate:cfg.bitrate}),keyFrameInterval:2});const audioSource=new AudioSampleSource({codec:'aac',quality:new Quality({bitrate:192000})});output.addVideoTrack(videoSource,{frameRate:cfg.fps,maximumPacketCount:cfg.frames+8});output.addAudioTrack(audioSource,{maximumPacketCount:Math.ceil(cfg.duration*48000/1024)+100});await output.start();let frameIndex=0,audioTime=0;
- const layerRows=[0,1,2].map(layer=>visibleSequence({...p,clips:sequence(p).filter(r=>r.layer===layer).map(r=>({...r.clip,start:r.start}))})),indices=[0,0,0];
+ const layerRows=[0,1,2].map(layer=>visibleSequence({...videoProject,clips:sequence(videoProject).filter(r=>r.layer===layer).map(r=>({...r.clip,start:r.start}))})),indices=[0,0,0];
  while(frameIndex<cfg.frames){
  check();const t=frameIndex/cfg.fps;ctx.globalAlpha=1;ctx.fillStyle='#000';ctx.fillRect(0,0,cfg.width,cfg.height);
  const active=layerRows.map((list,k)=>{while(indices[k]<list.length&&list[indices[k]].end<=t+1e-8)indices[k]++;const r=list[indices[k]];return r&&r.start<=t&&!r.clip.gap?r:null});

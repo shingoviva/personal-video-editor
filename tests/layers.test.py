@@ -27,5 +27,9 @@ with tempfile.TemporaryDirectory(prefix='pve-layers-') as tmp:
   return list(subprocess.check_output(core.BASE+['-v','error','-ss',str(t),'-i',str(path),'-frames:v','1','-vf','scale=1:1','-pix_fmt','rgb24','-f','rawvideo','pipe:1']))
  for t,channel in [(.2,0),(.7,2),(1.5,0)]:
   pixel=rgb(t);assert pixel[channel]>150,(t,pixel)
+ hidden=copy.deepcopy(project);hidden['videoTracks']=[{'hidden':False},{'hidden':True},{'hidden':False}]
+ hidden_result=core.render({'id':'hidden-layer','cancel':False},hidden);hidden_path=core.ROOT/'exports'/hidden_result['file'];core.validate_output(hidden_path,2,True)
+ hidden_pixel=list(subprocess.check_output(core.BASE+['-v','error','-ss','0.7','-i',str(hidden_path),'-frames:v','1','-vf','scale=1:1','-pix_fmt','rgb24','-f','rawvideo','pipe:1']))
+ assert hidden_pixel[0]>150 and hidden_pixel[2]<40,hidden_pixel
  assert hashes==[hashlib.sha256(pathlib.Path(m['path']).read_bytes()).hexdigest() for m in media]
- print('Native H.264/AAC two layers: red → blue → red, fractional boundaries, full decode, originals unchanged: PASS')
+ print('Native H.264/AAC layers: visibility switch, red → blue → red, fractional boundaries, full decode, originals unchanged: PASS')

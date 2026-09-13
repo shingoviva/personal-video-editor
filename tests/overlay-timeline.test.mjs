@@ -29,4 +29,9 @@ assert.ok(Math.abs(trimEffect.duration-3)<1e-8);
 trimElement.onpointerdown(trimEvent(100,'in'));trimElement.onpointermove(trimEvent(150,'in'));trimElement.onpointerup(trimEvent(150,'in'));
 assert.ok(Math.abs(trimEffect.start-1.5)<1e-8);assert.ok(Math.abs(trimEffect.duration-2.5)<1e-8);
 
-console.log('FX/Text timeline drag: arbitrary placement, edge trim, duration preservation and magnetic placement PASS');
+const groupEffect={id:'group-fx',start:1,duration:.5},groupText={id:'group-text',start:3,end:4},groupVideo={id:'group-video',start:5},groupFxElement=makeElement({fx:'group-fx'}),groupTextElement=makeElement({textChip:'group-text'}),groupVideoElement=makeElement({clip:'group-video'}),groupSurface={querySelectorAll:()=>[groupFxElement,groupTextElement,groupVideoElement]},groupRoot={getBoundingClientRect:()=>({width:1000}),querySelectorAll:()=>[groupFxElement,groupTextElement],closest:()=>groupSurface};
+bindOverlayTimeline({root:groupRoot,effects:[groupEffect],texts:[groupText],duration:10,targets:()=>[],snap:()=>false,select(){},begin(){},finish(){},cancel(){},preview(){},groupItems:()=>[{item:groupEffect,kind:'effect',start:1,span:.5},{item:groupText,kind:'text',start:3,span:1},{item:groupVideo,kind:'video',start:5,span:1}]});
+groupFxElement.onpointerdown(event(0));groupFxElement.onpointermove(event(100));groupFxElement.onpointerup(event(100));
+assert.equal(groupEffect.start,2);assert.equal(groupText.start,4);assert.equal(groupText.end,5);assert.equal(groupVideo.start,6);
+
+console.log('FX/Text timeline drag: placement, group move, edge trim, duration preservation and magnetic placement PASS');

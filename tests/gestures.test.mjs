@@ -21,3 +21,10 @@ console.log('Pointer unit checks: both trim handles, one checkpoint/drag, layer 
 
 const spacingRows=[{clip:{id:'a'},layer:0,start:0,end:1},{clip:{id:'b'},layer:0,start:2,end:3},{clip:{id:'c'},layer:0,start:4,end:5}];
 const spaced=equalSpacingStart(2.04,1,spacingRows[1],spacingRows,.01);assert.equal(spaced.start,2);assert.equal(spaced.spacing,true);
+
+const groupClips=[{id:'group-a',in:0,out:1,start:1,layer:0,speed:1,endSpeed:1,curve:'constant'},{id:'group-b',in:0,out:1,start:4,layer:0,speed:1,endSpeed:1,curve:'constant'}];
+const groupRows=groupClips.map(c=>({clip:c,start:c.start,end:c.start+1,duration:1,layer:0})),groupElements=groupClips.map(c=>({...element,dataset:{clip:c.id},style:{}})),other={id:'group-fx',start:6,duration:.5},otherElement={dataset:{fx:other.id},style:{}},groupRoot={getBoundingClientRect:()=>({width:1000}),querySelectorAll:selector=>selector==='[data-clip]'?groupElements:[...groupElements,otherElement]};
+bindTimeline({root:groupRoot,rows:groupRows,duration:10,select(){},begin(){},finish(){},cancel(){},preview(){},media:()=>m,snap:()=>false,getLayer:()=>0,groupRows:()=>groupRows,groupOthers:()=>[{item:other,kind:'effect',start:6,span:.5}],timelineRoot:groupRoot});
+groupElements[0].onpointerdown(event(0));groupElements[0].onpointermove(event(100));groupElements[0].onpointerup(event(100));
+assert.equal(groupClips[0].start,2);assert.equal(groupClips[1].start,5);assert.equal(other.start,7);
+console.log('Shift-selected clip group preserves spacing while moving: PASS');

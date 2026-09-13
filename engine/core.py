@@ -27,7 +27,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.11.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.12.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -394,11 +394,11 @@ def stabilization_filters(mode,trf='motion.trf'):
 
 def render(job,project,preview=False,_token=None,_size=None):
  audio_clips=validate_audio(project)
- clips=validate(project);caps=capabilities();preflight_render(project,clips,caps=caps);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30});w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
+ source_clips=validate(project);timeline_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(source_clips)]);tracks=project.get('videoTracks',[]);clips=[c for c in source_clips if not (len(tracks)>int(number(c.get('layer'),0,0,2)) and tracks[int(number(c.get('layer'),0,0,2))].get('hidden'))];caps=capabilities();preflight_render(project,clips,caps=caps);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),next((MEDIA[c['media']] for c in source_clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30}));w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
- video_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(clips)])
- if audio_extent(audio_clips)>video_end:clips=[*clips,{'gap':audio_extent(audio_clips)-video_end,'start':video_end}]
+ video_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(clips)]);required_end=max(timeline_end,audio_extent(audio_clips))
+ if required_end>video_end:clips=[*clips,{'gap':required_end-video_end,'start':video_end}]
  raw_clips=copy.deepcopy(clips)
  clips=visible_clips(clips,fps)
  crf={'Preview':28,'Standard':21,'High':18,'Maximum':15}.get(exp.get('quality'),21)
@@ -605,5 +605,7 @@ def analyze(job,id,intent='HIGH FASHION'):
   elif s['motion']>=threshold and low is not None:
    if s['time']-low>=minimum:markers.append({'time':low,'end':s['time'],'type':'quiet','label':'LOW VISUAL CHANGE','detail':f"{s['time']-low:.1f} sec — 意図的な間は残せます。"})
    low=None
- result={'media':id,'intent':intent,'sampleFps':fps,'method':'低解像度フレームの鮮鋭度・輝度・差分解析。顔・視線・ポーズの認識は未実装。','markers':sorted(markers,key=lambda x:x['time'])[:250],'samples':samples}
+ luminance=sorted(s['exposure'] for s in samples);low=luminance[int((len(luminance)-1)*.1)];high=luminance[int((len(luminance)-1)*.9)]
+ stats={'luma':sum(luminance)/len(luminance),'low':low,'high':high,'contrast':high-low,'clipping':sum(s['clipping'] for s in samples)/len(samples),'motion':med}
+ result={'media':id,'intent':intent,'sampleFps':fps,'method':'低解像度フレームの鮮鋭度・輝度・差分解析。顔・視線・ポーズの認識は未実装。','markers':sorted(markers,key=lambda x:x['time'])[:250],'stats':stats,'samples':samples}
  p=ROOT/'cache'/f'{id}-analysis.json';p.write_text(json.dumps(result));return result

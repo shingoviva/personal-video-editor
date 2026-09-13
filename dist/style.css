@@ -147,6 +147,17 @@ input,select,textarea{border-radius:7px;background:#0c100e;border-color:#303933}
 @media(max-width:430px){.workflow button{padding-inline:9px;font-size:10px}.workflow .analyze-tab{font-size:0}.workflow .analyze-tab::after{content:'✧';font-size:15px}.timeline-toolbar .edit-cluster button{min-width:34px}.timeline-toolbar #timelineMore{min-width:48px}.brand{min-width:47px}}
 @media(prefers-reduced-motion:reduce){button,.toast{transition:none!important}}
 
+/* 1.12.0 — compact track switches */
+.track-labels{width:124px}
+.track-labels-inner>.track-head{display:grid!important;width:100%;box-sizing:border-box;margin:0;padding:0 7px!important;align-items:center;overflow:hidden;border-bottom:1px solid #242c27;background:#121613}
+.track-labels-inner>.video-head{height:52px!important;grid-template-columns:24px 24px minmax(0,1fr);gap:3px}
+.track-labels-inner>.audio-head{height:44px!important;grid-template-columns:27px 23px minmax(0,1fr);gap:3px}
+.track-head button{min-width:0;padding:4px 2px;border:1px solid #313b35;border-radius:4px;font:9px var(--mono);color:#829087}
+.track-head button.selected,.track-head button[aria-pressed=true]{color:var(--accent);border-color:#68765b;background:#e2eeab12}
+.video-head.is-hidden{opacity:.48}.video-head.is-hidden button{color:#667169}.video-head strong{font:10px var(--mono);font-weight:500}.video-head small{display:block!important;overflow:hidden;text-overflow:ellipsis;font:8px var(--mono);color:#637068}
+.audio-head input[type=range]{width:100%;min-width:0;height:12px;margin:0}.audio-head.is-muted input{opacity:.35}
+@media(max-width:800px){.track-labels{width:94px}.track-labels-inner>.track-head{padding-inline:4px!important}.track-labels-inner>.video-head{grid-template-columns:22px 20px minmax(0,1fr)}.video-head small{display:none!important}.track-labels-inner>.audio-head{grid-template-columns:24px 21px minmax(0,1fr)}}
+
 /* 1.8.0 — text layers and stable preview nodes */
 #textOverlay{position:absolute;inset:0;overflow:hidden;pointer-events:none}
 .text-item{position:absolute;width:max-content;max-width:none;white-space:pre;line-height:1.12;box-sizing:border-box;text-rendering:geometricPrecision;will-change:transform,opacity}

@@ -3,7 +3,7 @@ import {execFileSync} from 'node:child_process';
 import {clip,project,sequence,timing,compileTimeline,splitClip,sanitize} from '../dist/model.js';
 import {clipAlpha,effectAlpha,textPose,frozenClip} from '../dist/creative.js';
 import {sourceTime,held} from '../dist/mobile-model.js';
-import {lookPresets,gradeRGB} from '../dist/look.js';
+import {lookPresets,gradeRGB,adaptiveCinematic} from '../dist/look.js';
 const m={id:'movie',duration:10,kind:'video'},p=project();p.media=[m];p.clips=[{...clip(m),start:0,layer:0}];
 const still=frozenClip(p,p.clips[0].id,3,2);assert.equal(still.freezeAt,3);assert.equal(still.layer,2);assert.equal(still.audio.mute,true);
 let row=sequence(p).find(r=>r.clip===still);assert.equal(row.end,5);assert.equal(sourceTime(row,4.8),3);assert(held(row,3));assert.equal(splitClip(still,3.01),null);
@@ -17,4 +17,5 @@ const samples=[];for(const color of Object.values(lookPresets))for(const amount 
 const native=JSON.parse(execFileSync('python3',['-c',"import sys,json;sys.path.insert(0,'engine');from color_engine import grade;print(json.dumps([grade(s['rgb'],s['color'],s['amount']) for s in json.load(sys.stdin)]))"],{input:JSON.stringify(samples),encoding:'utf8'}));
 samples.forEach((s,i)=>gradeRGB(s.rgb,s.color,s.amount).forEach((v,j)=>assert(Math.abs(v-native[i][j])<1e-10)));
 const mono=gradeRGB([.8,.4,.2],lookPresets.MONO,1.5);assert(Math.abs(mono[0]-mono[2])<1e-9);
+const under=adaptiveCinematic({luma:.7,contrast:.2,clipping:.1});assert(under.exposure<0);assert(under.highlights<0);assert(under.blacks<0);assert(under.contrast>0);
 console.log('Creative: freeze/source invariance, fade/text timing, 96 native/browser RGB matches PASS');

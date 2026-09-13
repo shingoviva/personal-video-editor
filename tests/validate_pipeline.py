@@ -44,8 +44,10 @@ else:
  try:core.preflight_render(q,caps=caps);raise AssertionError('missing vidstab accepted')
  except ValueError as e:assert 'vidstab' in str(e);results['stabilizer']={'pass':True,'supported':False,'preflight':str(e)}
 q=copy.deepcopy(p);q['clips']=[{**c,'out':.5},{'id':'gap','gap':.4,'media':m['id']},{**c,'id':'c2','in':.5,'out':1.5,'speed':2}];q['bgm']={'media':m['id'],'volume':.2,'fadeIn':.1,'fadeOut':.2};test('multi_clip_gap_bgm',lambda:render(q))
+def analyze(mode):
+ result=core.analyze({'cancel':False},m['id'],mode);assert all(k in result['stats'] for k in ('luma','low','high','contrast','clipping','motion'));return {k:v for k,v in result.items() if k!='samples'}
 for mode in ('HIGH FASHION','CLUB'):
- test('analyze_'+mode,lambda mode=mode:{k:v for k,v in core.analyze({'cancel':False},m['id'],mode).items() if k!='samples'})
+ test('analyze_'+mode,lambda mode=mode:analyze(mode))
 mute=fixture('noaudio',120,False);q=copy.deepcopy(p);q['clips'][0]['media']=mute['id'];test('120fps_no_audio',lambda:render(q))
 assert original==hashlib.sha256(pathlib.Path(m['path']).read_bytes()).hexdigest();results['source_unchanged']={'pass':True}
 (TEST/'results.json').write_text(json.dumps(results,indent=2));print('REPORT',TEST/'results.json');sys.exit(0 if all(r['pass'] for r in results.values()) else 1)

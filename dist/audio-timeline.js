@@ -10,7 +10,7 @@ export function trackGain(p,layer){const tracks=p.audioTracks||[],track=tracks[l
 export function detachAudio(p,id,layer=0){
  const row=sequence(p).find(r=>r.clip.id===id),m=p.media.find(m=>m.id===row?.clip.media);
  if(!row||!m?.audio||row.clip.freezeDuration||row.clip.audioDetached)return null;
- const c=row.clip,a={...structuredClone(c),id:uid(),kind:'audio',start:row.start,layer,sourceClip:id};
+ const c=row.clip,a={...structuredClone(c),id:uid(),kind:'audio',start:row.start,layer,sourceClip:id,linked:true};
  delete a.freezeAt;delete a.freezeDuration;delete a.audioDetached;
  (p.audioClips??=[]).push(a);c.audioDetached=a.id;c.audio.mute=true;return a;
 }

@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {clip,project,sequence,timing,compileTimeline,splitClip,sanitize} from '../dist/model.js';
-import {clipAlpha,effectAlpha,textPose,frozenClip,stretchClip} from '../dist/creative.js';
+import {clipAlpha,effectAlpha,textPose,frozenClip} from '../dist/creative.js';
 import {sourceTime,held} from '../dist/mobile-model.js';
-import {bindStretch} from '../dist/stretch-gesture.js';
 import {lookPresets,gradeRGB} from '../dist/look.js';
 const m={id:'movie',duration:10,kind:'video'},p=project();p.media=[m];p.clips=[{...clip(m),start:0,layer:0}];
 const still=frozenClip(p,p.clips[0].id,3,2);assert.equal(still.freezeAt,3);assert.equal(still.layer,2);assert.equal(still.audio.mute,true);
@@ -11,20 +10,11 @@ let row=sequence(p).find(r=>r.clip===still);assert.equal(row.end,5);assert.equal
 still.freezeDuration=4;assert.equal(sequence(p).find(r=>r.clip===still).end,7);
 assert.equal(sanitize(JSON.parse(JSON.stringify(p))).clips[1].freezeDuration,4);
 still.fadeIn=1;still.fadeOut=1;row=sequence(p).find(r=>r.clip===still);assert.equal(clipAlpha(row,3),0);assert.equal(clipAlpha(row,3.5),.5);assert.equal(clipAlpha(row,6.5),.5);
-const a=clip(m);a.curve='ease-in-out';a.speed=.25;a.endSpeed=4;const before=structuredClone(a),d=timing(a).duration;stretchClip(a,before,2);assert(Math.abs(timing(a).duration-2*d)<1e-8);
-stretchClip(a,before,1000);assert(a.speed>=.05&&a.endSpeed<=20);
-const right=splitClip(a,5),d2=timing(right).duration,base=structuredClone(right);stretchClip(right,base,.5);assert(Math.abs(timing(right).duration-d2/2)<1e-8);
 const e={type:'flash',start:2,duration:1,strength:.8};assert.equal(effectAlpha(e,2),.8);assert.equal(effectAlpha(e,2.5),.4);assert.equal(effectAlpha(e,3),0);e.type='black-out';assert.equal(effectAlpha(e,2),0);
 const txt={start:0,end:3,fadeIn:.4,fadeOut:.6,motion:'rise',x:.5,y:.8,opacity:1};assert.equal(textPose(txt,0).alpha,0);assert(textPose(txt,0).y>.8);assert.equal(textPose(txt,1).y,.8);assert(Math.abs(textPose(txt,2.7).alpha-.5)<1e-8);
-let starts=0,ends=0,cancels=0;const gestureClip=clip(m),el={setPointerCapture(){}};
-bindStretch(el,{clip:()=>gestureClip,begin:()=>starts++,finish:()=>ends++,change(){},cancel:()=>cancels++});
-const event=(id,x)=>({pointerId:id,clientX:x,button:0,preventDefault(){}});
-el.onpointerdown(event(1,0));el.onpointermove(event(1,120));el.onpointerup(event(1,120));assert.equal(gestureClip.speed,.5);assert.equal(starts,1);assert.equal(ends,1);
-el.onpointerdown(event(1,0));el.onpointerdown(event(2,100));el.onpointermove(event(2,200));el.onpointerup(event(2,200));el.onpointerup(event(1,0));assert.equal(gestureClip.speed,.25);assert.equal(starts,2);assert.equal(ends,2);
-el.onpointerdown(event(1,0));el.onpointercancel();assert.equal(cancels,1);
 // All looks, strengths, skin/highlight/shadow samples share native RGB math.
 const samples=[];for(const color of Object.values(lookPresets))for(const amount of [0,.5,1,1.5])for(const rgb of [[.7,.45,.3],[.95,.9,.85],[.1,.12,.2]])samples.push({rgb,color,amount});
 const native=JSON.parse(execFileSync('python3',['-c',"import sys,json;sys.path.insert(0,'engine');from color_engine import grade;print(json.dumps([grade(s['rgb'],s['color'],s['amount']) for s in json.load(sys.stdin)]))"],{input:JSON.stringify(samples),encoding:'utf8'}));
 samples.forEach((s,i)=>gradeRGB(s.rgb,s.color,s.amount).forEach((v,j)=>assert(Math.abs(v-native[i][j])<1e-10)));
 const mono=gradeRGB([.8,.4,.2],lookPresets.MONO,1.5);assert(Math.abs(mono[0]-mono[2])<1e-9);
-console.log('Creative: freeze/source invariance, ramps/stretch/pinch transactions, fade/text timing, 96 native/browser RGB matches PASS');
+console.log('Creative: freeze/source invariance, fade/text timing, 96 native/browser RGB matches PASS');

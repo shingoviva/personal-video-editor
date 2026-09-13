@@ -13,12 +13,4 @@ export function frozenClip(p,id,t,seconds=1){
  const frozen={...structuredClone(c),freezeAt:source,freezeDuration:clamp(seconds,1/30,60),in:source,out:Math.max(source+.001,Math.min(c.out,source+1/30)),hold:0,speed:1,endSpeed:1,curve:'constant',stabilization:'OFF',fadeIn:0,fadeOut:0};
  delete frozen.timingBase;frozen.audio={...c.audio,mute:true};return pasteClip(p,frozen,Math.max(0,t),2);
 }
-export function stretchClip(c,original,ratio){
- const scale=clamp(ratio,.0025,400);
- if(original.freezeDuration){c.freezeDuration=clamp(original.freezeDuration*scale,1/30,60);return}
- const a=original.speed||1,b=original.endSpeed||a,limited=clamp(scale,Math.max(a,b)/20,Math.min(a,b)/.05);
- c.speed=a/limited;c.endSpeed=b/limited;
- if(original.timingBase)c.timingBase={...original.timingBase,speed:original.timingBase.speed/limited,endSpeed:original.timingBase.endSpeed/limited};
- c.hold=(original.hold||0)*limited;
-}
 export function addEffect(p,type,t){const e={id:uid(),type,start:Math.max(0,t),duration:type==='flash'?.16:.6,strength:1};(p.effects??=[]).push(e);return e}

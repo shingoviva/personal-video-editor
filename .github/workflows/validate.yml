@@ -24,6 +24,7 @@ jobs:
           python tests/images.test.py
           python tests/layers.test.py
           python tests/multitrack.test.py
+          python tests/prores.test.py
           python tests/reliability.test.py
           python tests/server.test.py
           python tests/validate_pipeline.py

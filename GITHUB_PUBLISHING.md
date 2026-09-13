@@ -2,6 +2,8 @@
 
 このリポジトリは、そのままGitHubへ移せる構成です。元素材、プロジェクトの編集データ、書き出したMP4は含みません。
 
+公開対象の`dist/`は相対URLだけで動く静的Webアプリです。GitHub Pagesにはブラウザ版を配置し、Mac FFmpegエンジンは`dist/personal-video-editor-mac.zip`をGitHub Releasesにも添付してください。ProRes処理、`minterpolate`、`vidstab`はローカルエンジンで実行され、GitHub Pagesへ素材や編集内容を送信しません。
+
 ## 推奨構成
 
 - ソースコード: ShingoさんのGitHubリポジトリ

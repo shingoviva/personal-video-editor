@@ -34,4 +34,9 @@ bindOverlayTimeline({root:groupRoot,effects:[groupEffect],texts:[groupText],dura
 groupFxElement.onpointerdown(event(0));groupFxElement.onpointermove(event(100));groupFxElement.onpointerup(event(100));
 assert.equal(groupEffect.start,2);assert.equal(groupText.start,4);assert.equal(groupText.end,5);assert.equal(groupVideo.start,6);
 
+const spacingEffect={id:'spacing',start:1,duration:1},spacingElement=makeElement({fx:'spacing'}),spacingRoot={getBoundingClientRect:()=>({width:1000}),querySelectorAll:()=>[spacingElement]};let spacingResult;
+bindOverlayTimeline({root:spacingRoot,effects:[spacingEffect],texts:[],duration:10,targets:()=>[],snap:()=>true,select(){},begin(){},finish:(item,kind,result)=>spacingResult=result,cancel(){},preview(){},spacingItems:()=>[{item:{id:'left'},start:0,span:1},{item:{id:'right'},start:4,span:1}]});
+spacingElement.onpointerdown(event(0));spacingElement.onpointermove(event(104));spacingElement.onpointerup(event(104));
+assert.equal(spacingEffect.start,2);assert.equal(spacingResult.spacing.spacing,true);
+
 console.log('FX/Text timeline drag: placement, group move, edge trim, duration preservation and magnetic placement PASS');

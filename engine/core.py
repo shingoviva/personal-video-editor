@@ -438,13 +438,15 @@ def render(job,project,preview=False,_token=None,_size=None):
    if m.get('kind')=='image':vf+=['format=rgba','premultiply=inplace=1','format=rgb24']
    scale=number(c.get('scale'),1,1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1);ar=w/h
    preset=c.get('motionPreset','none');amount=number(c.get('motionAmount'),.12,0,.5);progress=f'min(max(t/{max(source_duration,.001):.9f},0),1)';ease=f'({progress})*({progress})*(3-2*({progress}))';scale_expr=str(scale);x_expr=str(x);y_expr=str(y)
-   if preset=='push-in':scale_expr=f'min(3,{scale}*(1+{amount}*({ease})))'
-   elif preset=='pull-out':scale_expr=f'min(3,{scale}*(1+{amount}*(1-({ease}))))'
-   elif preset=='pan-left':x_expr=f'max(0,min(1,{x}+{amount}*(.5-({ease}))))'
+   if preset=='pan-left':x_expr=f'max(0,min(1,{x}+{amount}*(.5-({ease}))))'
    elif preset=='pan-right':x_expr=f'max(0,min(1,{x}+{amount}*(({ease})-.5)))'
    elif preset=='pan-up':y_expr=f'max(0,min(1,{y}+{amount}*(.5-({ease}))))'
    elif preset=='pan-down':y_expr=f'max(0,min(1,{y}+{amount}*(({ease})-.5)))'
-   vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/({scale_expr})/2)*2':h='trunc(min(ih,iw/{ar})/({scale_expr})/2)*2':x='(iw-ow)*({x_expr})':y='(ih-oh)*({y_expr})'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
+   if preset in ('push-in','pull-out'):
+    frame_progress=f'min(max(on/{max(1,duration*fps-1):.9f},0),1)';frame_ease=f'({frame_progress})*({frame_progress})*(3-2*({frame_progress}))'
+    zoom=f'min(3,{scale}*(1+{amount}*({frame_ease})))' if preset=='push-in' else f'min(3,{scale}*(1+{amount}*(1-({frame_ease}))))'
+    vf.extend([f"zoompan=z='{zoom}':x='(iw-iw/zoom)*{x}':y='(ih-ih/zoom)*{y}':d=1:s={w}x{h}:fps={fps}",'setsar=1'])
+   else:vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/({scale_expr})/2)*2':h='trunc(min(ih,iw/{ar})/({scale_expr})/2)*2':x='(iw-ow)*({x_expr})':y='(ih-oh)*({y_expr})'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
    grade=color_filters(c.get('color',{}),number(c.get('lookAmount'),1,0,1.5));vf+=(['format=gbrpf32le']+grade if grade else []);vf+=['settb=AVTB','setpts=PTS-STARTPTS']
    # Use the same 32-piece integral as the browser timeline. Source PTS handles VFR.
    expr=f'{duration:.9f}'

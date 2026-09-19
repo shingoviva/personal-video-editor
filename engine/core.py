@@ -420,7 +420,7 @@ def render(job,project,preview=False,_token=None,_size=None):
     d=c['_window'][1];part=work/f'clip-{idx:04d}{ext}';outputs.append(part);job['operation']='空白区間を生成中'
     run(job,['-f','lavfi','-i',f'color=c=black:s={w}x{h}:r={fps}','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t',d,*video_args,*audio_args,'-video_track_timescale','90000',part],d,done/max(total,.001)*.85,d/max(total,.001)*.85)
     done+=d;continue
-   check(job);m=MEDIA[c['media']];nodes,pieces=timing(c);duration=nodes[-1][1];hold=number(c.get('hold'),0,0,10);vf=tone(m);source=m['path'];source_duration=c['out']-c['in'];seek=c['in'];job['operation']=f'クリップ {idx+1}/{len(clips)} を処理中'
+   check(job);m=MEDIA[c['media']];nodes,pieces=timing(c);duration=nodes[-1][1];hold=number(c.get('hold'),0,0,10);vf=tone(m);source=m['path'];source_duration=c['out']-c['in'];seek=c['in'];audio_source=source;audio_seek=seek;job['operation']=f'クリップ {idx+1}/{len(clips)} を処理中'
    stabil='OFF' if m.get('kind')=='image' or c.get('freezeDuration') else c.get('stabilization','OFF')
    if stabil!='OFF':
     if not caps['stabilization']:raise ValueError('このFFmpegにはvidstabがありません。libvidstab対応版が必要です。')
@@ -469,14 +469,17 @@ def render(job,project,preview=False,_token=None,_size=None):
     for k,(a,b,s,length) in enumerate(pieces):
      ap=work/f'audio-{k:03d}.wav';audio_parts.append(ap)
      af=f'atrim=duration={b-a},asetpts=PTS-STARTPTS,apad=pad_dur=1,{atempo(s)},apad,atrim=duration={length},asetpts=N/SR/TB'
-     run(job,['-ss',seek+a,'-i',source,'-vn','-af',af,'-c:a','pcm_f32le','-ar','48000','-ac','2',ap],length,done/max(total,.001)*.85,0)
+     run(job,['-ss',audio_seek+a,'-i',audio_source,'-vn','-af',af,'-c:a','pcm_f32le','-ar','48000','-ac','2',ap],length,done/max(total,.001)*.85,0)
     alist=work/'audio-concat.txt';alist.write_text(''.join(f"file '{p.name}'\n" for p in audio_parts));audio_ramp=work/'ramp.wav'
     run(job,['-f','concat','-safe','0','-i',alist,'-c','copy',audio_ramp],duration,done/max(total,.001)*.85,0)
     input_args+=['-i',audio_ramp]
     graph.append(f'[1:a]volume={volume},apad,atrim=duration={duration+hold},asetpts=N/SR/TB[mix]')
    elif m['audio'] and not c.get('freezeDuration'):
+    audio_index=0
+    if source!=audio_source:
+     audio_index=sum(1 for value in input_args if value=='-i');input_args+=['-ss',audio_seek,'-t',source_duration,'-i',audio_source]
     s=pieces[0][2]
-    graph.append(f'[0:a]asetpts=PTS-STARTPTS,apad=pad_dur=1,{atempo(s)},volume={volume},apad,atrim=duration={duration+hold},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[mix]')
+    graph.append(f'[{audio_index}:a]asetpts=PTS-STARTPTS,apad=pad_dur=1,{atempo(s)},volume={volume},apad,atrim=duration={duration+hold},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[mix]')
    else:graph.append(f'anullsrc=r=48000:cl=stereo,atrim=duration={duration+hold}[mix]')
    fadein=number(audio.get('fadeIn'),0,0,duration/2);fadeout=number(audio.get('fadeOut'),0,0,duration/2)
    graph.append(f'[mix]afade=t=in:d={max(.001,fadein)},afade=t=out:st={max(0,duration+hold-fadeout)}:d={max(.001,fadeout)}[a]')

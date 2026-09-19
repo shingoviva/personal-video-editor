@@ -453,10 +453,11 @@ def render(job,project,preview=False,_token=None,_size=None):
    if c.get('interpolation')=='motion':vf.append(f'minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=epzs:mb_size=16:vsbmc=1:scd=fdiff:scd_threshold=10')
    elif c.get('interpolation')=='blend':vf.append(f'framerate=fps={fps}:interp_start=0:interp_end=255:scene=100')
    else:vf.append(f'fps={fps}')
-   # Some Linux zscale builds cannot infer a conversion path from an RGB still
-   # with no color tags. Stills are 8-bit here, so swscale is the reliable path;
-   # decoded video keeps zscale's higher-precision dithering.
-   precision_convert='zscale=matrix=709:range=limited:dither=error_diffusion' if caps.get('hdr') and m.get('kind')!='image' else 'scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int:sws_dither=auto'
+   # Linux zscale cannot infer a conversion path from RGB stills or untagged
+   # SDR video. Use it only when the source color space is explicit; 8-bit
+   # untagged inputs use swscale's deterministic BT.709 conversion instead.
+   tagged=all(m.get(k) not in (None,'','unknown') for k in ('transfer','primaries','matrix'))
+   precision_convert='zscale=matrix=709:range=limited:dither=error_diffusion' if caps.get('hdr') and m.get('kind')!='image' and tagged else 'scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int:sws_dither=auto'
    vf+=['fps='+str(fps),'tpad=stop_mode=clone:stop=-1',f'trim=duration={duration+hold}',precision_convert,f'format={pixel}','setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709']
    graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=number(audio.get('volume'),1,0,2) if not audio.get('mute') and not any(t.get('solo') for t in project.get('audioTracks',[])) else 0
    input_args=['-loop','1','-framerate',fps,'-t',source_duration,'-i',source] if m.get('kind')=='image' else ['-ss',seek,'-t',source_duration,'-i',source]

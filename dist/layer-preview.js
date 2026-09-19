@@ -24,7 +24,7 @@ export class LayerPreview{
   }catch{this.painter?.black()}finally{this.busy=false;if(this.pending){const next=this.pending;this.pending=null;this.update(...next)}}
  }
  paint(){const s=this.state;if(!s?.row)return;const source=s.m.kind==='image'?this.still.bitmap:this.video;if(source)this.painter?.draw(source,motionTransform(s.row.clip,s.t-s.row.start,s.row.duration),s.aspect,s.compare)}
- clear(){this.state=null;this.pending=null;this.canvas.style.opacity='0';this.video.pause();this.controller?.abort();if(this.url){this.video.removeAttribute('src');this.video.load();this.url=null}this.still.clear();}
+ clear(){this.state=null;this.pending=null;this.canvas.style.opacity='0';this.video.pause();this.controller?.abort();if(this.url){this.video.removeAttribute('src');this.video.load();this.url=null}this.still.clear();this.painter?.release?.();}
  pause(){this.video.pause()}
  dispose(){this.clear();this.painter?.dispose()}
 }

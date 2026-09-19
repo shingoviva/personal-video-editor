@@ -5,7 +5,8 @@ export function textPose(text,t){
  const d=Math.max(.001,text.end-text.start),fi=Math.min(text.fadeIn??text.fade??0,d/2),fo=Math.min(text.fadeOut??text.fade??0,d/2);
  const ease=x=>{x=clamp(x,0,1);return x*x*(3-2*x)},md=Math.min(text.motionDuration??.4,d/2);
  const shift=.06*(1-ease((t-text.start)/Math.max(.001,md))-ease((t-(text.end-md))/Math.max(.001,md)));
- return{alpha:t<text.start||t>=text.end?0:clamp(text.opacity??1,0,1)*Math.max(0,Math.min(1,fi?(t-text.start)/fi:1,fo?(text.end-t)/fo:1)),x:(text.x??.5)+(text.motion==='slide-left'?shift:0),y:(text.y??.85)+(text.motion==='rise'?shift:0)};
+ const enter=ease((t-text.start)/Math.max(.001,md)),leave=ease((text.end-t)/Math.max(.001,md));
+ return{alpha:t<text.start||t>=text.end?0:clamp(text.opacity??1,0,1)*Math.max(0,Math.min(1,fi?(t-text.start)/fi:1,fo?(text.end-t)/fo:1)),x:(text.x??.5)+(text.motion==='slide-left'?shift:0),y:(text.y??.85)+(text.motion==='rise'?shift:0),scale:text.motion==='pop'?.82+.18*Math.min(enter,leave):1};
 }
 export function frozenClip(p,id,t,seconds=1){
  const row=sequence(p).find(r=>r.clip.id===id);if(!row||row.clip.gap)return null;

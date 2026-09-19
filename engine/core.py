@@ -27,7 +27,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.12.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.14.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -312,7 +312,7 @@ def validate(project):
 
 def output_size(project,m,preview=False):
  r=project.get('aspect','Original');ratios={'9:16':9/16,'4:5':.8,'1:1':1,'16:9':16/9};ar=ratios.get(r,m['width']/m['height']);res=project.get('export',{}).get('resolution','1080p')
- short=540 if preview else 2160 if res=='4K' else min(m['width'],m['height']) if res=='Source' else 1080
+ short=540 if preview else 2160 if res=='4K' else 1440 if res=='1440p' else min(m['width'],m['height']) if res=='Source' else 1080
  return (max(2,round((short*ar if ar>=1 else short)/2)*2),max(2,round((short if ar>=1 else short/ar)/2)*2))
 
 def atempo(speed):
@@ -379,7 +379,8 @@ def output_encoding(export,preview,crf):
  profile=None if preview else profiles.get(export.get('codec'))
  if profile:
   return {'extension':'.mov','pixel':'yuv422p10le','label':export.get('codec'),'video':['-c:v','prores_ks','-profile:v',profile,'-pix_fmt','yuv422p10le','-vendor','apl0'],'audio':['-c:a','pcm_s24le','-ar','48000']}
- return {'extension':'.mp4','pixel':'yuv420p','label':'H.264','video':['-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',str(crf),'-pix_fmt','yuv420p'],'audio':['-c:a','aac','-b:a','192k','-ar','48000']}
+ audio_rate='320k' if export.get('preset')=='YOUTUBE' and export.get('quality') in ('High','Maximum') and not preview else '192k'
+ return {'extension':'.mp4','pixel':'yuv420p','label':'H.264','video':['-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',str(crf),'-pix_fmt','yuv420p'],'audio':['-c:a','aac','-b:a',audio_rate,'-ar','48000']}
 
 def stabilization_filters(mode,trf='motion.trf'):
  """High accuracy detection plus conservative, profile-specific camera smoothing."""
@@ -515,8 +516,8 @@ def render(job,project,preview=False,_token=None,_size=None):
    graph=f"[1:v]format=rgba,colorchannelmixer=aa={strength},fade=t={direction}:st=0:d={d}:alpha=1,setpts=PTS-STARTPTS+{start}/TB[fx];[0:v][fx]overlay=eof_action=pass:repeatlast=0:enable='gte(t,{start})'[v]"
    run(job,['-i',joined,'-f','lavfi','-t',d,'-i',f'color=c={color}:s={w}x{h}:r={fps}','-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,*video_args,'-c:a','copy',fx],total,.89,0)
    joined=fx
-  bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[]
-  if len(texts)>20:raise ValueError('テキストは最大20個です。')
+  bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[];raster_layers=[]
+  if len(texts)>120:raise ValueError('テロップは最大120個です。')
   for i,t in enumerate(texts):
    text=str(t.get('text',''))[:2000]
    if not text:continue
@@ -530,18 +531,32 @@ def render(job,project,preview=False,_token=None,_size=None):
     d=b-a;xp=f'main_w*{tx}' if align=='left' else f'main_w*{tx}-overlay_w' if align=='right' else f'main_w*{tx}-overlay_w/2';yp=f'main_h*{ty}-overlay_h/2'
     if t.get('motion')=='rise':yp+=f'+main_h*({shift})'
     if t.get('motion')=='slide-left':xp+=f'+main_w*({shift})'
-    filters=[f"scale=w='min(iw*{h/1080:.9f},{w}*.92)':h=-1:flags=lanczos",'format=rgba',f'colorchannelmixer=aa={op}']
+    scale_filter=f"scale=w='min(iw*{h/1080:.9f},{w}*.92)':h=-1:flags=lanczos"
+    if t.get('motion')=='pop':
+     phase=f'max(0,min(1,min(t/{md},({d}-t)/{md})))';ease_scale=f'({phase})*({phase})*(3-2*({phase}))';scale_filter=f"scale=w='min(iw*{h/1080:.9f}*(.82+.18*({ease_scale})),{w}*.92)':h=-1:flags=lanczos:eval=frame"
+    filters=[scale_filter,'format=rgba',f'colorchannelmixer=aa={op}']
     if fi:filters.append(f'fade=t=in:st=0:d={fi}:alpha=1')
     if fo:filters.append(f'fade=t=out:st={max(0,d-fo)}:d={fo}:alpha=1')
-    graph=f"[1:v]{','.join(filters)},setpts=PTS-STARTPTS+{a}/TB[text];[0:v][text]overlay=x='{xp}':y='{yp}':eof_action=pass:repeatlast=0:enable='between(t,{a},{b})'[v]"
-    texted=work/f'texted-{i}{ext}';job['operation']=f'テキスト {i+1}/{len(texts)} を合成中'
-    run(job,['-i',joined,'-loop','1','-framerate',fps,'-t',d,'-i',raster,'-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,*video_args,'-c:a','copy',texted],total,.89,0)
-    joined=texted
+    raster_layers.append({'path':raster,'duration':d,'start':a,'end':b,'x':xp,'y':yp,'filters':filters})
    elif caps.get('drawtext'):
     txt=work/f'text-{i}.txt';txt.write_text(text,encoding='utf-8');xp=f'w*{tx}' if align=='left' else f'w*{tx}-tw' if align=='right' else f'w*{tx}-tw/2'
     if t.get('motion')=='rise':yp+=f'+h*({shift})'
     if t.get('motion')=='slide-left':xp+=f'+w*({shift})'
-    final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor=white:fontsize={size}:x='{xp}':y='{yp}':alpha='{alpha}':enable='between(t,{a},{b})'")
+    fill=t.get('color','#ffffff');border=number(t.get('outline'),0,0,20)*h/1080;border_color=t.get('outlineColor','#000000');shadow_x=number(t.get('shadowX'),0,-50,50)*h/1080 if t.get('shadow') else 0;shadow_y=number(t.get('shadowY'),0,-50,50)*h/1080 if t.get('shadow') else 0;shadow_color=t.get('shadowColor','#000000')
+    final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor={fill}:fontsize={size}:borderw={border}:bordercolor={border_color}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:x='{xp}':y='{yp}':alpha='{alpha}':enable='between(t,{a},{b})'")
+  if raster_layers:
+   # Compose all browser-rasterized captions in one encode. This preserves
+   # quality and avoids re-decoding/re-encoding the full movie per caption.
+   text_args=['-i',joined];text_graph=[];previous='0:v'
+   for j,layer in enumerate(raster_layers,1):
+    text_args+=['-loop','1','-framerate',fps,'-t',layer['duration'],'-i',layer['path']]
+    label=f'text{j}';out_label=f'caption{j}'
+    text_graph.append(f"[{j}:v]{','.join(layer['filters'])},setpts=PTS-STARTPTS+{layer['start']}/TB[{label}]")
+    text_graph.append(f"[{previous}][{label}]overlay=x='{layer['x']}':y='{layer['y']}':eof_action=pass:repeatlast=0:enable='between(t,{layer['start']},{layer['end']})'[{out_label}]")
+    previous=out_label
+   texted=work/f'texted{ext}';job['operation']=f'{len(raster_layers)}個のテロップを一括合成中'
+   run(job,text_args+['-filter_complex',';'.join(text_graph),'-map',f'[{previous}]','-map','0:a','-t',total,*video_args,'-c:a','copy',texted],total,.89,0)
+   joined=texted
   out=ROOT/('cache' if preview else 'exports')/(token+ext)
   args=['-i',joined];bg=MEDIA.get(bgm.get('media'));graph=[]
   if bg:

@@ -1,7 +1,9 @@
 """Create the downloadable local app without dependencies or private media."""
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+import json
 root = Path(__file__).resolve().parent.parent
+version = json.loads((root / 'package.json').read_text())['version']
 output = root / 'dist/personal-video-editor-mac.zip'
 entries = ['dist', 'engine', 'tests', 'validation', 'scripts', 'README.md', 'VALIDATION.md', 'Launch.command', 'package.json', 'package-lock.json', 'vite.config.mjs']
 with ZipFile(output, 'w', ZIP_DEFLATED, compresslevel=9) as archive:
@@ -33,5 +35,8 @@ with ZipFile(output) as archive:
     assert 'Personal-Video-Editor/dist/linked-audio.js' in archive.namelist()
     assert 'Personal-Video-Editor/tests/prores.test.py' in archive.namelist()
     assert 'Personal-Video-Editor/tests/overlay-timeline.test.mjs' in archive.namelist()
-    assert b"'build':'1.12.0'" in archive.read('Personal-Video-Editor/engine/core.py')
+    assert 'Personal-Video-Editor/dist/caption-presets.js' in archive.namelist()
+    assert 'Personal-Video-Editor/dist/preview-performance.js' in archive.namelist()
+    assert 'Personal-Video-Editor/tests/youtube.test.py' in archive.namelist()
+    assert f"'build':'{version}'".encode() in archive.read('Personal-Video-Editor/engine/core.py')
 print(f'Mac bundle verified: {output.stat().st_size:,} bytes')

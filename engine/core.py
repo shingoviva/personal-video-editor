@@ -27,7 +27,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.14.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.15.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -510,10 +510,11 @@ def render(job,project,preview=False,_token=None,_size=None):
   for i,e in enumerate(effects):
    kind=e.get('type')
    if kind not in ('flash','black-in','black-out'):continue
-   start=number(e.get('start'),0,0,total);d=number(e.get('duration'),.6,1/60,30);strength=number(e.get('strength'),1,0,1)
+   start=number(e.get('start'),0,0,total);d=number(e.get('duration'),.6,1/60,30);hold=number(e.get('hold'),0,0,max(0,d-1/60));transition=max(1/60,d-hold);strength=number(e.get('strength'),1,0,1)
    if start>=total or strength==0:continue
-   color='white' if kind=='flash' else 'black';direction='in' if kind=='black-out' else 'out';fx=work/f'fx-{i}{ext}'
-   graph=f"[1:v]format=rgba,colorchannelmixer=aa={strength},fade=t={direction}:st=0:d={d}:alpha=1,setpts=PTS-STARTPTS+{start}/TB[fx];[0:v][fx]overlay=eof_action=pass:repeatlast=0:enable='gte(t,{start})'[v]"
+   color='white' if kind=='flash' else 'black';direction='in' if kind=='black-out' else 'out';fade_start=hold if kind=='black-in' else 0;fade_duration=transition if kind!='flash' else d;fx=work/f'fx-{i}{ext}'
+   graph=f"[1:v]format=rgba,colorchannelmixer=aa={strength},fade=t={direction}:st={fade_start}:d={fade_duration}:alpha=1,setpts=PTS-STARTPTS+{start}/TB[fx];[0:v][fx]overlay=eof_action=pass:repeatlast=0:enable='gte(t,{start})*lt(t,{start+d})'[v]"
+   job['operation']=f'画面効果 {i+1}/{len(effects)} を合成中'
    run(job,['-i',joined,'-f','lavfi','-t',d,'-i',f'color=c={color}:s={w}x{h}:r={fps}','-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,*video_args,'-c:a','copy',fx],total,.89,0)
    joined=fx
   bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[];raster_layers=[]
@@ -528,7 +529,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    u=f'clip((t-{a})/{md},0,1)';v=f'clip((t-({b}-{md}))/{md},0,1)';shift=f'.06*(1-({u})*({u})*(3-2*({u}))-({v})*({v})*(3-2*({v})))';yp=f'h*{ty}-th/2'
    raster=text_raster(t,work,i)
    if raster:
-    d=b-a;xp=f'main_w*{tx}' if align=='left' else f'main_w*{tx}-overlay_w' if align=='right' else f'main_w*{tx}-overlay_w/2';yp=f'main_h*{ty}-overlay_h/2'
+    d=b-a;raster_info=t.get('raster',{});rw=max(1,number(raster_info.get('width'),1,1,8192));rh=max(1,number(raster_info.get('height'),1,1,8192));anchor_x=number(raster_info.get('anchorX'),rw/2,0,rw)/rw;anchor_y=number(raster_info.get('anchorY'),rh/2,0,rh)/rh;xp=f'main_w*{tx}-overlay_w*{anchor_x:.9f}';yp=f'main_h*{ty}-overlay_h*{anchor_y:.9f}'
     if t.get('motion')=='rise':yp+=f'+main_h*({shift})'
     if t.get('motion')=='slide-left':xp+=f'+main_w*({shift})'
     scale_filter=f"scale=w='min(iw*{h/1080:.9f},{w}*.92)':h=-1:flags=lanczos"
@@ -543,7 +544,7 @@ def render(job,project,preview=False,_token=None,_size=None):
     if t.get('motion')=='rise':yp+=f'+h*({shift})'
     if t.get('motion')=='slide-left':xp+=f'+w*({shift})'
     fill=t.get('color','#ffffff');border=number(t.get('outline'),0,0,20)*h/1080;border_color=t.get('outlineColor','#000000');shadow_x=number(t.get('shadowX'),0,-50,50)*h/1080 if t.get('shadow') else 0;shadow_y=number(t.get('shadowY'),0,-50,50)*h/1080 if t.get('shadow') else 0;shadow_color=t.get('shadowColor','#000000')
-    final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor={fill}:fontsize={size}:borderw={border}:bordercolor={border_color}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:x='{xp}':y='{yp}':alpha='{alpha}':enable='between(t,{a},{b})'")
+    final_vf.append(f"drawtext=textfile={txt}:expansion=none:font='{font}':fontcolor={fill}:fontsize={size}:borderw={border}:bordercolor={border_color}:shadowx={shadow_x}:shadowy={shadow_y}:shadowcolor={shadow_color}:x='{xp}':y='{yp}':alpha='{alpha}':enable='gte(t,{a})*lt(t,{b})'")
   if raster_layers:
    # Compose all browser-rasterized captions in one encode. This preserves
    # quality and avoids re-decoding/re-encoding the full movie per caption.
@@ -552,7 +553,7 @@ def render(job,project,preview=False,_token=None,_size=None):
     text_args+=['-loop','1','-framerate',fps,'-t',layer['duration'],'-i',layer['path']]
     label=f'text{j}';out_label=f'caption{j}'
     text_graph.append(f"[{j}:v]{','.join(layer['filters'])},setpts=PTS-STARTPTS+{layer['start']}/TB[{label}]")
-    text_graph.append(f"[{previous}][{label}]overlay=x='{layer['x']}':y='{layer['y']}':eof_action=pass:repeatlast=0:enable='between(t,{layer['start']},{layer['end']})'[{out_label}]")
+    text_graph.append(f"[{previous}][{label}]overlay=x='{layer['x']}':y='{layer['y']}':eof_action=pass:repeatlast=0:enable='gte(t,{layer['start']})*lt(t,{layer['end']})'[{out_label}]")
     previous=out_label
    texted=work/f'texted{ext}';job['operation']=f'{len(raster_layers)}個のテロップを一括合成中'
    run(job,text_args+['-filter_complex',';'.join(text_graph),'-map',f'[{previous}]','-map','0:a','-t',total,*video_args,'-c:a','copy',texted],total,.89,0)

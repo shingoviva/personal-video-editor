@@ -35,7 +35,7 @@ export function rasterizeText(text){
  const maxWidth=1920*.88,lineHeight=size*style.lineHeight,spacing=style.letterSpacing,basePad=size*(style.box==='none'?.08:style.boxPadding),effectPad=style.outline*2+(style.shadow?style.shadowBlur+Math.max(Math.abs(style.shadowX),Math.abs(style.shadowY)):0),pad=Math.ceil(basePad+effectPad),contentWidth=Math.min(maxWidth,Math.max(...rows.map(line=>lineWidth(probe,line,spacing)),1)),width=Math.max(2,Math.ceil(contentWidth+pad*2)),height=Math.max(2,Math.ceil(rows.length*lineHeight+pad*2));
  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d');ctx.font=`${style.weight} ${size}px ${fontFamily(style.font)}`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineJoin='round';
  if(style.box!=='none'){ctx.fillStyle=boxFill(style);roundRect(ctx,effectPad,effectPad,width-effectPad*2,height-effectPad*2,size*style.boxRadius);ctx.fill()}
- drawRows(ctx,rows,{x:width/2,y:height/2,maxWidth,lineHeight,spacing,align:'center',style,scale:1});return{data:canvas.toDataURL('image/png'),width,height};
+ drawRows(ctx,rows,{x:width/2,y:height/2,maxWidth,lineHeight,spacing,align:'center',style,scale:1});const anchorX=style.align==='left'?pad:style.align==='right'?width-pad:width/2;return{data:canvas.toDataURL('image/png'),width,height,anchorX,anchorY:height/2};
 }
 export function withTextRasters(project){const copy=structuredClone(project);copy.texts=copy.texts.map(text=>({...text,raster:rasterizeText(text)}));return copy}
 

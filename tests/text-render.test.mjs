@@ -20,6 +20,7 @@ assert.equal(sanitizeTexts(Array.from({length:MAX_TEXT_LAYERS+5},(_,i)=>({text:S
 assert.equal('raster' in sanitizeTexts([{text:'safe',raster:{data:'large'}}])[0],false);
 const subtitle=captionDefaults(1,4,'subtitle');assert.equal(subtitle.outline,4);assert.equal(subtitle.y,.86);assert.equal(subtitle.shadow,true);
 const custom={};applyCaptionPreset(custom,'lowerThird');assert.equal(custom.align,'left');assert.equal(custom.motion,'slide-left');
+assert.equal(captionDefaults(0,2,'varietyYellow').outline,7);assert.equal(captionDefaults(0,2,'varietyRed').color,'#ff4a3d');assert.equal(captionDefaults(0,2,'cornerTag').align,'left');
 const [decorated]=sanitizeTexts([{text:'装飾',outline:99,outlineColor:'#123456',shadow:true,shadowOpacity:2,shadowBlur:99,shadowX:-99,shadowY:99,box:'custom',boxColor:'#abcdef',boxOpacity:.4,boxPadding:.5,boxRadius:.2,motion:'pop'}]);
 assert.equal(decorated.outline,20);assert.equal(decorated.shadowOpacity,1);assert.equal(decorated.shadowBlur,40);assert.equal(decorated.shadowX,-50);assert.equal(decorated.shadowY,50);assert.equal(decorated.box,'custom');assert.equal(decorated.motion,'pop');
 console.log('Text layers: 120 captions, decoration, presets, validation and persisted raster exclusion PASS');

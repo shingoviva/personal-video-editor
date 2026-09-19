@@ -1,5 +1,15 @@
 # Validation — 2026-09-20
 
+## 1.15.2 — コピー／複製の上限処理
+
+- 複数種類の選択を貼り付ける際、上限済みのFXを除外し、空きのあるテキストだけを元の相対時刻で追加できることを自動試験で確認した。
+- テキスト120個の上限到達後は追加結果を空として返し、存在しないIDを選択対象にしないことを確認した。
+- 映像と分離音声を複製した場合、新しい映像IDと音声IDが相互に正しく連動することを確認した。
+- Macエンジンへ接続したChromeで1440×1000と390×844を確認し、テロップ追加・番組インパクト適用・横方向のはみ出しなしを確認した。未指定faviconの404も解消した。
+- `npm test`、`npm run build`、Pythonのcapabilities/images/layers/multitrack/prores/reliability/server/pipeline/formats/creative/youtube/program-workflow、Mac ZIP生成を通過した。
+
+iPhone 16 Pro Safari、実写HDR、長時間連続編集、第三者のMac Safariは今回未検証です。
+
 ## 1.15.1 — TV番組テロップ
 
 - macOS Chrome 152で「番組二段・青赤」と「番組インパクト」を実際のタイムラインへ配置し、二重アウトライン、2行の白／赤切り替え、指定語のみ黒またはサーモン色へ変わることを目視確認した。

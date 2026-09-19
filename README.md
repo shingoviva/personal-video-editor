@@ -1,8 +1,14 @@
-# PERSONAL VIDEO EDITOR — V1 Preview · 1.13.1
+# PERSONAL VIDEO EDITOR — V1 Preview · 1.13.2
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**1.10.0を安定復帰点として固定し、1.13.1を自動試験とChrome操作確認を通過した現在版とします。** H.264/SDR実写素材、`IMG_7917.mov` のHEVC/SDR/VFR実写素材、合成素材でMac処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+**1.10.0を安定復帰点として固定し、1.13.2を自動試験とChrome操作確認を通過した現在版とします。** H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+
+## 1.13.2 — ANIMATED EXPORT FIX
+
+- 端末書き出しでGPUテクスチャが最初のフレームに固定される問題を修正する。
+- 動くCanvasは毎フレームGPUへ再転送し、動画要素だけ安全なフレームキャッシュを使う。
+- 実写素材 `IMG_7697.MP4` を検証素材として `.qa-media/real/` に保持する（Git管理外）。
 
 ## 1.13.1 — APP-LIKE INPUT
 

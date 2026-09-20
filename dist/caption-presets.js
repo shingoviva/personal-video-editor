@@ -12,4 +12,5 @@ export const captionPresets={
  tvImpact:{label:'番組インパクト',description:'黒フチ＋白い外フチ＋強調語',style:{font:'Sans',weight:800,color:'#ffffff',lineColors:[],accentColor:'#ff817b',accentWords:'',outline:5,outlineColor:'#080808',outerOutline:7,outerOutlineColor:'#ffffff',shadow:true,shadowColor:'#000000',shadowOpacity:.85,shadowBlur:2,shadowX:6,shadowY:8,box:'none',size:88,letterSpacing:-1.5,lineHeight:1.03,align:'center',x:.5,y:.82,motion:'pop',fadeIn:.05,fadeOut:.08,motionDuration:.16}}
 };
 export function applyCaptionPreset(text,key){const preset=captionPresets[key]||captionPresets.subtitle;Object.assign(text,structuredClone(preset.style));return text}
-export function captionDefaults(start=0,end=start+3,key='subtitle'){return applyCaptionPreset({text:'テロップを入力',opacity:1,start,end},key)}
+export function applyCaptionPresetStable(text,key){const layout=Object.fromEntries(['font','size','x','y','align','letterSpacing','lineHeight'].map(name=>[name,text[name]]));applyCaptionPreset(text,key);for(const[name,value]of Object.entries(layout))if(value!==undefined)text[name]=value;text.motion='none';return text}
+export function captionDefaults(start=0,end=start+3,key='subtitle'){const text=applyCaptionPreset({text:'テロップを入力',opacity:1,layer:0,start,end},key);text.motion='none';return text}

@@ -27,7 +27,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.15.2','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.16.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -395,7 +395,9 @@ def stabilization_filters(mode,trf='motion.trf'):
 
 def render(job,project,preview=False,_token=None,_size=None):
  audio_clips=validate_audio(project)
- source_clips=validate(project);timeline_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(source_clips)]);tracks=project.get('videoTracks',[]);clips=[c for c in source_clips if not (len(tracks)>int(number(c.get('layer'),0,0,2)) and tracks[int(number(c.get('layer'),0,0,2))].get('hidden'))];caps=capabilities();preflight_render(project,clips,caps=caps);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),next((MEDIA[c['media']] for c in source_clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30}));w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
+ overlay_end=max([0]+[number(e.get('start'),0,0,86400)+number(e.get('duration'),.6,1/60,86400) for e in project.get('effects',[])]+[number(t.get('end'),0,0,86400) for t in project.get('texts',[])])
+ render_project=project if project.get('clips') else {**project,'clips':[{'gap':max(overlay_end,audio_extent(audio_clips),1/30),'start':0}]}
+ source_clips=validate(render_project);timeline_end=max([overlay_end]+[c['_at']+c['_window'][1] for c in visible_clips(source_clips)]);tracks=project.get('videoTracks',[]);clips=[c for c in source_clips if not (len(tracks)>int(number(c.get('layer'),0,0,2)) and tracks[int(number(c.get('layer'),0,0,2))].get('hidden'))];caps=capabilities();preflight_render(project,clips,caps=caps);first=next((MEDIA[c['media']] for c in clips if c.get('media') in MEDIA),next((MEDIA[c['media']] for c in source_clips if c.get('media') in MEDIA),{'width':1920,'height':1080,'fps':30}));w,h=_size or output_size(project,first,preview);exp=project.get('export',{});fps=number(exp.get('fps'),(first['fps'] or 30) if exp.get('fps')=='Source' else 30,1,240)
  if preview:fps=min(30,fps)
  fps=min(60,fps) # SNS V1 delivery contract
  video_end=max([0]+[c['_at']+c['_window'][1] for c in visible_clips(clips)]);required_end=max(timeline_end,audio_extent(audio_clips))
@@ -462,7 +464,9 @@ def render(job,project,preview=False,_token=None,_size=None):
    tagged=all(m.get(k) not in (None,'','unknown') for k in ('transfer','primaries','matrix'))
    precision_convert='zscale=matrix=709:range=limited:dither=error_diffusion' if caps.get('hdr') and m.get('kind')!='image' and tagged else 'scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int:sws_dither=auto'
    vf+=['fps='+str(fps),'tpad=stop_mode=clone:stop=-1',f'trim=duration={duration+hold}',precision_convert,f'format={pixel}','setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709']
-   graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=number(audio.get('volume'),1,0,2) if not audio.get('mute') and not any(t.get('solo') for t in project.get('audioTracks',[])) else 0
+   # Source audio is mixed per video layer after picture compositing. Keeping
+   # these clip parts silent avoids duplicating the visible layer's audio.
+   graph=['[0:v]'+','.join(vf)+'[v]'];audio=c.get('audio',{});volume=0
    input_args=['-loop','1','-framerate',fps,'-t',source_duration,'-i',source] if m.get('kind')=='image' else ['-ss',seek,'-t',source_duration,'-i',source]
    if m['audio'] and not c.get('freezeDuration') and len(pieces)>1:
     # Render ramp audio pieces sequentially to disk. No full-length asplit queues in RAM.
@@ -505,7 +509,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    if (work/'stabilized.mov').exists():(work/'stabilized.mov').unlink()
   concat=work/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in outputs));joined=work/('joined'+ext)
   job['operation']='クリップを結合中';run(job,['-f','concat','-safe','0','-i',concat,'-c','copy',joined],total,.85,.04)
-  effects=project.get('effects',[])
+  overlay_tracks=project.get('overlayTracks',[]);overlay_visible=lambda item:not (len(overlay_tracks)>int(number(item.get('layer'),0,0,2)) and overlay_tracks[int(number(item.get('layer'),0,0,2))].get('hidden'));effects=[e for e in project.get('effects',[]) if overlay_visible(e)]
   if len(effects)>20:raise ValueError('画面効果は最大20個です。')
   for i,e in enumerate(effects):
    kind=e.get('type')
@@ -517,7 +521,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    job['operation']=f'画面効果 {i+1}/{len(effects)} を合成中'
    run(job,['-i',joined,'-f','lavfi','-t',d,'-i',f'color=c={color}:s={w}x{h}:r={fps}','-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,*video_args,'-c:a','copy',fx],total,.89,0)
    joined=fx
-  bgm=project.get('bgm',{});texts=project.get('texts',[]);final_vf=[];raster_layers=[]
+  bgm=project.get('bgm',{});texts=[t for t in project.get('texts',[]) if overlay_visible(t)];final_vf=[];raster_layers=[]
   if len(texts)>120:raise ValueError('テロップは最大120個です。')
   for i,t in enumerate(texts):
    text=str(t.get('text',''))[:2000]
@@ -532,9 +536,9 @@ def render(job,project,preview=False,_token=None,_size=None):
     d=b-a;raster_info=t.get('raster',{});rw=max(1,number(raster_info.get('width'),1,1,8192));rh=max(1,number(raster_info.get('height'),1,1,8192));anchor_x=number(raster_info.get('anchorX'),rw/2,0,rw)/rw;anchor_y=number(raster_info.get('anchorY'),rh/2,0,rh)/rh;xp=f'main_w*{tx}-overlay_w*{anchor_x:.9f}';yp=f'main_h*{ty}-overlay_h*{anchor_y:.9f}'
     if t.get('motion')=='rise':yp+=f'+main_h*({shift})'
     if t.get('motion')=='slide-left':xp+=f'+main_w*({shift})'
-    scale_filter=f"scale=w='min(iw*{h/1080:.9f},{w}*.92)':h=-1:flags=lanczos"
+    ref_h=max(1,number(raster_info.get('referenceHeight'),1080,1,8192));base_scale=min(h/ref_h,w*.92/rw,h*.9/rh);scale_filter=f"scale=w='iw*{base_scale:.9f}':h=-1:flags=lanczos"
     if t.get('motion')=='pop':
-     phase=f'max(0,min(1,min(t/{md},({d}-t)/{md})))';ease_scale=f'({phase})*({phase})*(3-2*({phase}))';scale_filter=f"scale=w='min(iw*{h/1080:.9f}*(.82+.18*({ease_scale})),{w}*.92)':h=-1:flags=lanczos:eval=frame"
+     phase=f'max(0,min(1,min(t/{md},({d}-t)/{md})))';ease_scale=f'({phase})*({phase})*(3-2*({phase}))';scale_filter=f"scale=w='iw*{base_scale:.9f}*(.82+.18*({ease_scale}))':h=-1:flags=lanczos:eval=frame"
     filters=[scale_filter,'format=rgba',f'colorchannelmixer=aa={op}']
     if fi:filters.append(f'fade=t=in:st=0:d={fi}:alpha=1')
     if fo:filters.append(f'fade=t=out:st={max(0,d-fo)}:d={fo}:alpha=1')
@@ -564,18 +568,25 @@ def render(job,project,preview=False,_token=None,_size=None):
    args+=['-stream_loop','-1','-i',bg['path']];vol=number(bgm.get('volume'),.3,0,2);fi=number(bgm.get('fadeIn'),0,0,total/2);fo=number(bgm.get('fadeOut'),0,0,total/2)
    graph=[f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]','[0:a][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]'];args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
   independent=render_tracks(job,project,audio_clips,work,total)
-  if independent:
-   # Rebuild a single final mix with the visible video audio and independent lanes.
+  video_audio=[];ends=[0.,0.,0.]
+  if not any(t.get('solo') for t in project.get('audioTracks',[])):
+   for original in project.get('clips',[]):
+    layer=int(number(original.get('layer'),0,0,2));duration=timing(original)[0][-1][1]+number(original.get('hold'),0,0,10);start=number(original.get('start'),ends[layer],0,86400);ends[layer]=max(ends[layer],start+duration);media=MEDIA.get(original.get('media'))
+    if media and media.get('audio') and not original.get('freezeDuration') and not (len(tracks)>layer and tracks[layer].get('hidden')):video_audio.append({**copy.deepcopy(original),'start':start,'layer':layer})
+  video_sources=render_tracks(job,project,video_audio,work,total,track_key='videoTracks',layers=3,prefix='video')
+  mixed_tracks=[*video_sources,*independent]
+  if mixed_tracks:
+   # Rebuild one final mix from every audible video and independent audio lane.
    args=['-i',joined];graph=[];labels=['[0:a]'];index=1
    if bg:
     args+=['-stream_loop','-1','-i',bg['path']]
     graph.append(f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]');labels.append('[bg]');index+=1
-   for path in independent:args+=['-i',path];labels.append(f'[{index}:a]');index+=1
+   for path in mixed_tracks:args+=['-i',path];labels.append(f'[{index}:a]');index+=1
    graph.append(''.join(labels)+f'amix=inputs={len(labels)}:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]')
    args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
   if final_vf:args+=['-vf',','.join(final_vf),*video_args]
   else:args+=['-c:v','copy']
-  if bg or independent:args+=audio_args
+  if bg or mixed_tracks:args+=audio_args
   else:args+=['-c:a','copy']
   args+=['-t',total,'-movflags','+faststart',out]
   job['operation']=encoding['label']+'を仕上げ中';run(job,args,total,.89,.09,verify_decode=True)

@@ -1,4 +1,4 @@
-import {clip,uid,sequence,audioSequence,timing,visibleSequence,clamp} from './model.js';
+import {clip,uid,sequence,audioSequence,timing,visibleSequence,clamp,total} from './model.js';
 const cache=new WeakMap();
 export function audioWindows(p){
  const key=(p.audioClips||[]).map(c=>[c.id,c.start,c.layer,c.in,c.out,c.speed,c.endSpeed,c.curve,c.hold,c.loop,JSON.stringify(c.timingBase)].join(':')).join('|'),old=cache.get(p);
@@ -15,11 +15,11 @@ export function detachAudio(p,id,layer=0){
  (p.audioClips??=[]).push(a);c.audioDetached=a.id;c.audio.mute=true;return a;
 }
 export function appendAudio(p,media,start=0,layer=2){
- const a={...clip(media),kind:'audio',layer,start,loop:false};(p.audioClips??=[]).push(a);return a;
+ const a={...clip(media),kind:'audio',layer,start,loop:false,linked:false,sourceClip:null};(p.audioClips??=[]).push(a);return a;
 }
 export function migrateBgm(p){
  if(!p.bgm?.media)return;
  const m=p.media.find(m=>m.id===p.bgm.media);if(!m)return;
- const d=Math.max(0,...sequence(p).map(r=>r.end));if(d<=0)return;
+ const d=total(p);if(d<=0)return;
  const a=appendAudio(p,m,0,2);a.out=d;a.loop=true;a.audio={volume:p.bgm.volume??.3,fadeIn:p.bgm.fadeIn||0,fadeOut:p.bgm.fadeOut||0,mute:false};p.bgm={volume:.3};
 }

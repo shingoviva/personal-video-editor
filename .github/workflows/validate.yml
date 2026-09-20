@@ -32,6 +32,7 @@ jobs:
           python tests/creative.test.py
           python tests/youtube.test.py
           python tests/program-workflow.test.py
+          python tests/overlay-only.test.py
       - run: python scripts/package-mac.py
       - uses: actions/upload-artifact@v4
         with:

@@ -17,7 +17,7 @@ export function youtubeProgramPlan(total,{title='TITLE',hold=1.6,fade=1,outro=1}
    {id:uid(),type:'black-in',start:0,duration:introDuration,hold:Math.min(introHold,introDuration-1/60),strength:1},
    {id:uid(),type:'black-out',start:Math.max(0,end-outroDuration),duration:outroDuration,hold:Math.min(.25,outroDuration/3),strength:1}
   ],
-  text:{id:uid(),...captionDefaults(0,titleEnd,'headline'),text:String(title||'TITLE').slice(0,2000),start:0,end:titleEnd,fadeIn:Math.min(.25,introHold/3),fadeOut:Math.min(introFade,titleEnd/2),motion:'pop'},
+  text:{id:uid(),...captionDefaults(0,titleEnd,'headline'),text:String(title||'TITLE').slice(0,2000),start:0,end:titleEnd,fadeIn:Math.min(.25,introHold/3),fadeOut:Math.min(introFade,titleEnd/2),motion:'none'},
   export:{preset:'YOUTUBE',aspect:'AUTO',resolution:'1080p',fps:'30',quality:'High',codec:'H.264'}
  }
 }

@@ -1,6 +1,6 @@
 import {sequence,total,timing,sourceOffset,clamp} from './model.js';
 export function outputSettings(p,preview=false){
- const m=p.media.find(m=>m.id===p.clips.find(c=>!c.gap)?.media);if(!m)throw Error('動画を追加してください。');
+ const m=p.media.find(m=>m.id===p.clips.find(c=>!c.gap)?.media)||{width:1920,height:1080,fps:30};
  const ar=p.aspect==='Original'?m.width/m.height:p.aspect.split(':').map(Number).reduce((a,b)=>a/b);
  const edge=preview?540:p.export.resolution==='4K'?2160:p.export.resolution==='1440p'?1440:p.export.resolution==='Source'?Math.min(m.width,m.height):1080;
  const width=2*Math.max(1,Math.round((ar>=1?edge*ar:edge)/2)),height=2*Math.max(1,Math.round((ar>=1?edge:edge/ar)/2));

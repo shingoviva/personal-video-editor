@@ -259,3 +259,33 @@ body[data-step=text] #textOverlay{pointer-events:auto}
 body[data-step=text] .text-item{pointer-events:auto;cursor:text}
 .fx-chip.dragging{z-index:20;opacity:.82;box-shadow:0 8px 24px #0009;transition:none}
 .keyframe-list{display:grid;gap:5px;margin:10px 0}.keyframe-list>div{display:grid;grid-template-columns:1fr 32px;gap:5px}.keyframe-list button{display:flex;justify-content:space-between;align-items:center}.keyframe-list>div>button:last-child{justify-content:center;color:var(--muted)}
+
+/* 2.0.0 — object-led workspace */
+.selection-context{display:grid;grid-template-rows:auto auto;gap:2px;min-width:185px;max-width:230px;padding:4px 14px;border-left:1px solid #334038}
+.selection-context span{font:8px var(--mono);letter-spacing:.12em;color:var(--accent);white-space:nowrap}
+.selection-context strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;font-weight:600;color:#dce2dc}
+.project-heading{min-width:120px}
+.workflow{overflow-x:auto}
+.workflow-group{transition:opacity .16s ease,border-color .16s ease,background .16s ease;opacity:.72}
+.workflow-group.active-scope{opacity:1;border-color:#526049;background:linear-gradient(180deg,#20271f,#151a16);box-shadow:inset 0 1px #ffffff0d,0 7px 24px #0003}
+.workflow-group.active-scope .workflow-label{color:#b9c6b4}
+.workflow-label{font-size:7px;letter-spacing:.14em}
+.workflow button{padding-inline:12px}
+.workflow-assist{margin-left:auto}
+.inspector>.panel-title{display:grid;grid-template-columns:minmax(0,1fr) minmax(60px,110px) 28px;gap:8px;padding-inline:15px}
+#inspectorTitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#dce4dc;font-size:10px}
+#selectionLabel{text-align:right}
+.inspector-tabs{position:sticky;top:-20px;z-index:8;display:grid;grid-template-columns:auto repeat(4,1fr);gap:3px;align-items:center;margin:-20px -20px 18px;padding:10px 12px;background:#151a17ec;border-bottom:1px solid #303a33;backdrop-filter:blur(16px)}
+.inspector-tabs>span{padding-right:5px;color:#78847c;font:8px var(--mono);letter-spacing:.12em}
+.inspector-tabs button{min-width:0;padding:7px 3px;border:1px solid #303a33;background:#101411;color:#8f9a93;font:8px var(--mono);letter-spacing:.04em}
+.inspector-tabs button.selected{border-color:#83936c;background:#dce9a914;color:var(--accent)}
+.inspector-empty{display:grid;gap:9px;padding:34px 12px;text-align:center;border:1px dashed #38433c;border-radius:9px;background:#101411}
+.inspector-empty span{font:8px var(--mono);letter-spacing:.13em;color:#758078}
+.inspector-empty strong{font-size:13px;font-weight:600}.inspector-empty p{margin:0;font-size:11px!important}
+body[data-workspace=video] .viewer-panel{box-shadow:inset 0 1px #dce9a90b}
+body[data-workspace=graphics] .viewer-panel{box-shadow:inset 0 1px #9eb8cf18}
+body[data-workspace=audio] .viewer-panel{box-shadow:inset 0 1px #69d6c118}
+@media(max-width:1280px){.selection-context{min-width:145px;max-width:170px;padding-inline:10px}.workflow button{padding-inline:9px}.topbar{gap:9px}}
+@media(max-width:1050px){.selection-context{min-width:120px;max-width:140px}.selection-context strong{font-size:10px}.project-heading{display:none}.workflow-assist{margin-left:0}}
+@media(max-width:800px){.selection-context{min-width:0;max-width:105px;padding:3px 6px;border-left:0}.selection-context span{font-size:7px}.selection-context strong{font-size:9px}.workflow-group{opacity:1}.inspector-tabs{top:-20px;grid-template-columns:repeat(4,1fr)}.inspector-tabs>span{display:none}}
+@media(max-width:520px){.selection-context{max-width:72px}.selection-context strong{display:none}.top-history{display:none}.workflow button{padding-inline:8px}}

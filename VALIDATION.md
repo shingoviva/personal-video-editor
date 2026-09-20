@@ -1,4 +1,14 @@
-# Validation — 2026-09-20
+# Validation — 2026-09-21
+
+## 2.0.0 — UI再編・テロップ独立装飾
+
+- ナビゲーションを`MEDIA / VIDEO / GRAPHICS / AUDIO / ASSIST`の5領域へ再編し、動画選択では`BASIC / MOTION / COLOR / LOOKS`を右設定欄内から移動できることを確認した。別の動画を選び直しても現在の動画サブメニューを保持し、TEXTから動画を選んだ場合はBASICへ移る。
+- 1600×1000のmacOS Chromeで動画、テロップ、FX、音声の選択に応じた右設定欄と左上の選択表示を操作した。390×844を含めて横方向のページはみ出しはなく、JavaScript例外は0件だった。
+- 2個のテロップへShift複数選択で同じ装飾を適用し、未選択テロップが変化しないことを確認した。別の2個へ黄と青の異なる装飾を順番に設定し、同時表示時に両方の色と輪郭が残ることをDOMと画面で確認した。
+- テキスト属性ペーストでは本文、開始・終了、F/Tトラックを保持し、色、二重輪郭、影、背景、文字組み、位置、透明度、アニメーションだけが深いコピーで移る。自動保存後の再読込でも3テロップの状態が完全一致した。
+- `npm test`、`npm run build`、Pythonのcapabilities/images/layers/multitrack/creative/youtube/program-workflow/overlay-only/prores/reliability/server/validate_formats/validate_pipelineを通過した。Mac ZIP（459,777 bytes）を生成して内容検査も通過した。
+
+実機Safari、iPhone 16 Pro、実写HDR、長時間連続編集、第三者のMac環境は今回未検証です。
 
 ## 1.17.0 — 調整・透明度キーフレーム・オーバーレイ移動
 

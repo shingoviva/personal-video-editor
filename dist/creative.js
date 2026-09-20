@@ -1,5 +1,11 @@
 import {clamp,timing,sequence,uid,pasteClip,sourceOffset} from './model.js';
-export function clipAlpha(row,t){if(!row||t<row.start||t>=row.end)return 0;const c=row.clip,d=timing(c).duration,local=t-row.start+(row.offset||0),fi=Math.min(c.fadeIn||0,d/2),fo=Math.min(c.fadeOut||0,d/2);return clamp(c.opacity??1,0,1)*Math.max(0,Math.min(1,fi?local/fi:1,fo?(d-local)/fo:1))}
+export function opacityAt(clip,local,duration=Infinity){
+ const points=(clip?.opacityKeyframes||[]).filter(k=>Number.isFinite(+k.time)&&Number.isFinite(+k.value)).map(k=>({time:clamp(+k.time,0,duration),value:clamp(+k.value,0,1)})).sort((a,b)=>a.time-b.time);
+ if(!points.length)return clamp(clip?.opacity??1,0,1);if(local<=points[0].time)return points[0].value;if(local>=points.at(-1).time)return points.at(-1).value;
+ for(let i=1;i<points.length;i++)if(local<=points[i].time){const a=points[i-1],b=points[i],u=clamp((local-a.time)/Math.max(1e-6,b.time-a.time),0,1),ease=u*u*(3-2*u);return a.value+(b.value-a.value)*ease}
+ return points.at(-1).value;
+}
+export function clipAlpha(row,t){if(!row||t<row.start||t>=row.end)return 0;const c=row.clip,d=timing(c).duration,local=t-row.start+(row.offset||0),fi=Math.min(c.fadeIn||0,d/2),fo=Math.min(c.fadeOut||0,d/2);return opacityAt(c,local,d)*Math.max(0,Math.min(1,fi?local/fi:1,fo?(d-local)/fo:1))}
 export function effectAlpha(e,t){if(t<e.start||t>=e.start+e.duration)return 0;const elapsed=t-e.start,d=Math.max(1/60,e.duration),hold=clamp(e.hold||0,0,Math.max(0,d-1/60)),transition=Math.max(1/60,d-hold),strength=clamp(e.strength??1,0,1);if(e.type==='black-in')return strength*(elapsed<=hold?1:1-clamp((elapsed-hold)/transition,0,1));if(e.type==='black-out')return strength*clamp(elapsed/transition,0,1);return strength*(1-clamp(elapsed/d,0,1))}
 export function textPose(text,t){
  const d=Math.max(.001,text.end-text.start),fi=Math.min(text.fadeIn??text.fade??0,d/2),fo=Math.min(text.fadeOut??text.fade??0,d/2);

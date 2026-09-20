@@ -25,6 +25,11 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  assert a[0]>200 and a[2]<30,(a,b,c)
  assert b[0]>80 and b[2]>80,(a,b,c)
  assert c[2]>200 and c[0]<30,(a,b,c)
+ qkey=copy.deepcopy(p);qkey['clips'][1].pop('fadeIn',None);qkey['clips'][1].pop('fadeOut',None);qkey['clips'][1]['opacityKeyframes']=[{'time':0,'value':0},{'time':1,'value':1},{'time':2,'value':0}]
+ out=render(qkey,'opacity-keyframes');a,b,c=pixel(out,.05),pixel(out,1),pixel(out,1.9)
+ assert a[0]>180 and a[2]<80,(a,b,c)
+ assert b[2]>180 and b[0]<80,(a,b,c)
+ assert c[0]>180 and c[2]<80,(a,b,c)
  q=copy.deepcopy(p);q['clips']=q['clips'][:1];q['effects']=[{'type':'flash','start':0,'duration':.4,'strength':1},{'type':'black-in','start':.5,'duration':.4,'strength':1},{'type':'black-out','start':1,'duration':1,'strength':1}]
  out=render(q,'effects')
  assert min(pixel(out,0))>220,pixel(out,0)

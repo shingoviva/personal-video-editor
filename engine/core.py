@@ -17,6 +17,18 @@ def number(v,default=0,lo=-1e9,hi=1e9):
  try: n=float(v); return max(lo,min(hi,n)) if math.isfinite(n) else default
  except (ValueError,TypeError): return default
 
+def opacity_expression(clip,duration,offset=0):
+ points=[]
+ for value in clip.get('opacityKeyframes',[])[:32]:
+  if not isinstance(value,dict):continue
+  points.append((number(value.get('time'),0,0,duration),number(value.get('value'),1,0,1)))
+ points=sorted(dict(points).items())
+ if not points:return str(number(clip.get('opacity'),1,0,1))
+ x=f'(T+{offset})';expr=str(points[-1][1])
+ for (a,av),(b,bv) in reversed(list(zip(points,points[1:]))):
+  u=f'max(0,min(1,(({x})-{a})/{max(1e-6,b-a)}))';smooth=f'({u})*({u})*(3-2*({u}))';value=f'({av}+({bv-av})*({smooth}))';expr=f'if(lt({x},{b}),{value},{expr})'
+ return f'if(lt({x},{points[0][0]}),{points[0][1]},{expr})'
+
 def ratio(s):
  try:
   a,b=str(s).split('/');return float(a)/float(b)
@@ -27,7 +39,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.16.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'1.17.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -410,7 +422,7 @@ def render(job,project,preview=False,_token=None,_size=None):
  work=ROOT/'cache'/('render-'+token);work.mkdir();outputs=[];total=sum(c['_window'][1] for c in clips);done=0;lower_paths={}
  try:
   for target in (1,2):
-   if not any(c.get('layer')==target and (c.get('fadeIn') or c.get('fadeOut') or c.get('opacity',1)<1) for c in raw_clips):continue
+   if not any(c.get('layer')==target and (c.get('fadeIn') or c.get('fadeOut') or c.get('opacity',1)<1 or c.get('opacityKeyframes')) for c in raw_clips):continue
    ends=[0.,0.,0.];lower=[]
    for c in raw_clips:
     layer=int(number(c.get('layer'),0,0,2));d=timing(c)[0][-1][1]+c.get('hold',0);start=c.get('start',ends[layer]);ends[layer]=max(ends[layer],start+d)
@@ -491,10 +503,10 @@ def render(job,project,preview=False,_token=None,_size=None):
    offset,window_duration=c['_window']
    graph[0]=graph[0].replace('[v]',f',trim=start={offset}:duration={window_duration},setpts=PTS-STARTPTS[v]')
    graph[-1]=graph[-1].replace('[a]',f',atrim=start={offset}:duration={window_duration},asetpts=PTS-STARTPTS[a]')
-   fi=number(c.get('fadeIn'),0,0,(duration+hold)/2);fo=number(c.get('fadeOut'),0,0,(duration+hold)/2);opacity=number(c.get('opacity'),1,0,1)
-   if fi or fo or opacity<1:
+   fi=number(c.get('fadeIn'),0,0,(duration+hold)/2);fo=number(c.get('fadeOut'),0,0,(duration+hold)/2);opacity=number(c.get('opacity'),1,0,1);opacity_keys=c.get('opacityKeyframes',[])
+   if fi or fo or opacity<1 or opacity_keys:
     ai=f'(T+{offset})/{fi}' if fi else '1';ao=f'({duration+hold}-T-{offset})/{fo}' if fo else '1'
-    alpha=f'{opacity}*max(0,min(1,min({ai},{ao})))'
+    alpha=f'({opacity_expression(c,duration+hold,offset)})*max(0,min(1,min({ai},{ao})))'
     graph[0]=graph[0].replace('[v]','[top]')
     if c.get('layer') in lower_paths:
      index=sum(1 for a in input_args if a=='-i');input_args+=['-ss',c['_at'],'-i',str(lower_paths[c.get('layer')])]

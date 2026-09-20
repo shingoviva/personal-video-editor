@@ -1,4 +1,4 @@
-export const attributeGroups={color:['color','lookName','lookAmount'],crop:['scale','x','y'],motion:['speed','endSpeed','curve','stabilization','interpolation'],visual:['opacity','fadeIn','fadeOut'],audio:['audio']};
+export const attributeGroups={color:['color','lookName','lookAmount'],crop:['scale','x','y'],motion:['speed','endSpeed','curve','stabilization','interpolation'],visual:['opacity','opacityKeyframes','fadeIn','fadeOut'],audio:['audio']};
 export function pasteAttributes(target,source,groups){
  if(!target||!source)return false;
  let changed=false;

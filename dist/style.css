@@ -257,3 +257,5 @@ body.media-expanded .column-splitter,body.inspector-expanded .column-splitter{di
 .text-layer-list .text-layer-row>[data-text-delete]{padding:5px 2px;border:1px solid var(--border);color:#9aa494}
 body[data-step=text] #textOverlay{pointer-events:auto}
 body[data-step=text] .text-item{pointer-events:auto;cursor:text}
+.fx-chip.dragging{z-index:20;opacity:.82;box-shadow:0 8px 24px #0009;transition:none}
+.keyframe-list{display:grid;gap:5px;margin:10px 0}.keyframe-list>div{display:grid;grid-template-columns:1fr 32px;gap:5px}.keyframe-list button{display:flex;justify-content:space-between;align-items:center}.keyframe-list>div>button:last-child{justify-content:center;color:var(--muted)}

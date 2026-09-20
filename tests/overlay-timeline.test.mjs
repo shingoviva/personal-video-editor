@@ -14,7 +14,7 @@ const makeElement=dataset=>({dataset,style:{},classList:{add(){},remove(){}},set
 const root={getBoundingClientRect:()=>({width:1000}),querySelectorAll:()=>[fxElement,textElement]};
 let begins=0,finishes=0,cancels=0,previews=[];
 bindOverlayTimeline({root,effects:[effect],texts:[text],duration:10,targets:()=>[3.02,4],snap:()=>true,select(){},begin(){begins++},finish(){finishes++},cancel(){cancels++},preview:(item,kind,snap)=>previews.push({item,kind,snap})});
-const event=(x)=>({button:0,pointerId:1,clientX:x});
+const event=(x,y=10)=>({button:0,pointerId:1,clientX:x,clientY:y});
 fxElement.onpointerdown(event(100));fxElement.onpointermove(event(300));fxElement.onpointerup(event(300));
 assert.equal(effect.start,3.02);assert.equal(previews.at(-1).snap.snapped,true);
 textElement.onpointerdown(event(100));textElement.onpointermove(event(297));textElement.onpointerup(event(297));
@@ -39,4 +39,8 @@ bindOverlayTimeline({root:spacingRoot,effects:[spacingEffect],texts:[],duration:
 spacingElement.onpointerdown(event(0));spacingElement.onpointermove(event(104));spacingElement.onpointerup(event(104));
 assert.equal(spacingEffect.start,2);assert.equal(spacingResult.spacing.spacing,true);
 
-console.log('FX/Text timeline drag: placement, group move, edge trim, duration preservation and magnetic placement PASS');
+const layerEffect={id:'layer-fx',start:1,duration:1,layer:0},layerElement=makeElement({fx:'layer-fx'}),layerRoot={getBoundingClientRect:()=>({width:1000}),querySelectorAll:()=>[layerElement]};let layerResult;
+bindOverlayTimeline({root:layerRoot,effects:[layerEffect],texts:[],duration:10,targets:()=>[],snap:()=>false,select(){},begin(){},finish:(item,kind,result)=>layerResult=result,cancel(){},preview(){},getLayer:y=>y>50?{layer:2,offset:80}:{layer:0,offset:0}});
+layerElement.onpointerdown(event(100,10));layerElement.onpointermove(event(100,90));assert.equal(layerEffect.layer,2);assert.equal(layerElement.style.transform,'translateY(80px)');layerElement.onpointerup(event(100,90));assert.equal(layerResult.layerChanged,true);assert.equal(layerElement.style.transform,'');
+
+console.log('FX/Text timeline drag: placement, vertical layer move, group move, edge trim, duration preservation and magnetic placement PASS');

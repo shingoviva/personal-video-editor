@@ -36,6 +36,10 @@ const translations=[
  ['プレビューとメモリ設定','Preview and memory settings'],['プレビューとメモリ','Preview & memory'],['プレビューメモリを今すぐ解放','Release preview memory now'],['推定搭載メモリ','Estimated device memory'],['ブラウザ内の使用量','Browser storage used'],['利用可能な上限','Available quota'],['保持素材','Retained media'],['保存容量を確認・整理','Review storage'],
  ['書き出す','Export'],['編集中の比率','Editing aspect ratio'],['プリセット推奨','Preset recommendation'],['完成データ検証','Validate output'],['映像・カラー・FX','Video, color & FX'],['テロップ合成','Caption compositing'],['音声・MP4確定','Audio & MP4 finalize'],['開始しています','Starting'],['経過','Elapsed'],['残り目安','About'],
  ['利用可能','Available'],['未対応','Unsupported'],['接続','Connection'],['文字','Text'],['プロジェクト保存','Save project'],['プロジェクト名','Project name'],['設定パネルを広げる','Expand inspector'],['編集画面へ戻す','Return to editor'],['編集ワークフロー','Editing workflow'],
+ ['選択した動画・静止画だけを調整します。','Adjust only the selected video or still.'],['すべて非破壊で、プレビューと書き出しに同じ値を使います。','All adjustments are non-destructive and shared by preview and export.'],
+ ['露出','Exposure'],['コントラスト','Contrast'],['ハイライト','Highlights'],['シャドウ','Shadows'],['白レベル','Whites'],['黒レベル','Blacks'],['中間調（Gamma）','Gamma'],['色温度','Temperature'],['色かぶり補正','Tint'],['彩度','Saturation'],['自然な彩度','Vibrance'],['黒浮かせ','Fade'],['シャープ','Sharpness'],['周辺光量','Vignette'],
+ ['再生ヘッド位置に点を追加し、点の間を滑らかに補間します。','Add points at the playhead; values interpolate smoothly between them.'],['この位置の不透明度','Opacity at this position'],['再生ヘッド位置へ追加／更新','Add / update at playhead'],['不透明度点を削除','Delete opacity point'],['キーフレームをすべて解除','Clear all keyframes'],['キーフレームがない間は上の不透明度とフェード設定を使います。','Without keyframes, the opacity and fade settings above are used.'],
+ ['ベーシック','Basic'],['ソフトシャドウ','Soft shadow'],['標準フチ','Standard stroke'],['字幕ボックス','Subtitle box'],['イタリック','Italic'],['輪郭線の太さ','Stroke width'],['輪郭線の色','Stroke color'],['第2輪郭（番組向け）','Second stroke'],['第2輪郭の色','Second stroke color'],
  ['日本語','Japanese'],['英語','English'],['英語表示へ切り替え','Switch to English'],['日本語表示へ切り替え','Switch to Japanese'],['表示言語を英語へ変更しました。','Language changed to English.'],['表示言語を日本語へ変更しました。','Language changed to Japanese.']
 ];
 

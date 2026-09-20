@@ -41,7 +41,8 @@ const translations=[
  ['再生ヘッド位置に点を追加し、点の間を滑らかに補間します。','Add points at the playhead; values interpolate smoothly between them.'],['この位置の不透明度','Opacity at this position'],['再生ヘッド位置へ追加／更新','Add / update at playhead'],['不透明度点を削除','Delete opacity point'],['キーフレームをすべて解除','Clear all keyframes'],['キーフレームがない間は上の不透明度とフェード設定を使います。','Without keyframes, the opacity and fade settings above are used.'],
  ['ベーシック','Basic'],['ソフトシャドウ','Soft shadow'],['標準フチ','Standard stroke'],['字幕ボックス','Subtitle box'],['イタリック','Italic'],['輪郭線の太さ','Stroke width'],['輪郭線の色','Stroke color'],['第2輪郭（番組向け）','Second stroke'],['第2輪郭の色','Second stroke color'],
  ['日本語','Japanese'],['英語','English'],['英語表示へ切り替え','Switch to English'],['日本語表示へ切り替え','Switch to Japanese'],['表示言語を英語へ変更しました。','Language changed to English.'],['表示言語を日本語へ変更しました。','Language changed to Japanese.']
- ,['編集ワークスペース','Editing workspace'],['タイムラインから素材を選択','Select an item on the timeline'],['選んだ素材に必要な調整項目が、ここへ表示されます。','Controls for the selected item appear here.'],['映像調整','Video controls'],['選択中のテロップへ装飾をまとめて適用します。','Apply styling to all selected captions.'],['文字内容と表示時間は個別に保持します。','Text and timing remain independent.'],['テロップの装飾属性を適用しました。','Caption styling pasted.'],['細かな露出・色調整はVIDEO / COLORで行えます。','Use VIDEO / COLOR for detailed tone and color controls.'],['FXはまだ配置されていません。','No effects on the timeline yet.'],['名称未設定','Untitled']
+ ,['編集ワークスペース','Editing workspace'],['タイムラインから素材を選択','Select an item on the timeline'],['選んだ素材に必要な調整項目が、ここへ表示されます。','Controls for the selected item appear here.'],['映像調整','Video controls'],['選択中のテロップへ装飾をまとめて適用します。','Apply styling to all selected captions.'],['文字内容と表示時間は個別に保持します。','Text and timing remain independent.'],['テロップの装飾属性を適用しました。','Caption styling pasted.'],['細かな露出・色調整はVIDEO / COLORで行えます。','Use VIDEO / COLOR for detailed tone and color controls.'],['FXはまだ配置されていません。','No effects on the timeline yet.'],['名称未設定','Untitled'],
+ ['Macのフォントを表示','Show Mac fonts'],['フォントファイルを追加','Add font file'],['候補を選ぶ','Choose candidate'],['再リンク候補を選ぶ','Choose relink candidates'],['再リンク候補','Relink candidates'],['一致度','Match score']
 ];
 
 const byJapanese=[...translations].sort((a,b)=>b[0].length-a[0].length);
@@ -50,7 +51,7 @@ let language=globalThis.localStorage?.getItem('pve.language')==='en'?'en':'ja';
 
 export function currentLanguage(){return language}
 export function setLanguage(next){language=next==='en'?'en':'ja';globalThis.localStorage?.setItem('pve.language',language);if(globalThis.document)document.documentElement.lang=language;return language}
-export function translate(value,target=language){let result=String(value??'');if(target==='en')result=result.replace(/([VA]\d)へ配置/g,'Place on $1');else result=result.replace(/Place on ([VA]\d)/g,'$1へ配置');const pairs=target==='en'?byJapanese:byEnglish;for(const[from,to]of pairs)if(result.includes(from))result=result.split(from).join(to);return result}
+export function translate(value,target=language){let result=String(value??'');if(target==='en')result=result.replace(/([VA]\d)へ配置/g,'Place on $1');else result=result.replace(/Place on ([VA]\d)/g,'$1へ配置');const pairs=target==='en'?byJapanese:byEnglish;for(const[from,to]of pairs){if(target==='ja'&&from==='No'){result=result.replace(/\bNo\b/g,to);continue}if(result.includes(from))result=result.split(from).join(to)}return result}
 export function translateDOM(root=document){
  document.documentElement.lang=language;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;

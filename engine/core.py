@@ -39,7 +39,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.0.0','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.0.1','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -398,7 +398,7 @@ def stabilization_filters(mode,trf='motion.trf'):
  """High accuracy detection plus conservative, profile-specific camera smoothing."""
  profiles={
   'WEAK':(3,6,0.28),'MEDIUM':(5,14,0.20),'STRONG':(8,28,0.12),
-  'HANDHELD':(7,10,0.18),'NATURAL':(5,12,0.16),'GIMBAL':(6,24,0.10),'TRIPOD':(9,50,0.06)
+  'HANDHELD':(7,10,0.18),'NATURAL':(5,12,0.16),'GIMBAL':(6,24,0.10),'HORIZON':(8,42,0.07),'TRIPOD':(9,50,0.06)
  }
  shakiness,smoothing,zoomspeed=profiles.get(mode,profiles['MEDIUM'])
  detect=f'vidstabdetect=shakiness={shakiness}:accuracy=15:stepsize=4:mincontrast=0.15:show=0:result={trf}'

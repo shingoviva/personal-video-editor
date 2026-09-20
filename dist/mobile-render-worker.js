@@ -5,8 +5,8 @@ import {imageBitmap} from './image-media.js';
 import {renderer} from './preview.js';
 import {sequence,visibleSequence,timing,sourceOffset,total} from './model.js';
 import {outputSettings,sourceTime,gainAt,held,mixWindow,limitStereo} from './mobile-model.js';
-import {translation,smoothPath,correctionAt} from './mobile-stabilize.js';
-import {drawTextCanvas} from './text-render.js';
+import {motionEstimate,smoothPath,correctionAt} from './mobile-stabilize.js';
+import {drawTextCanvas,drawTextRasterCanvas} from './text-render.js';
 import {motionTransform} from './motion-transform.js';
 import {frameAtTimestamp} from './frame-source.js';
 let cancelled=false,limiter={gain:1};
@@ -30,8 +30,8 @@ export async function mixAudio(rows,resources,p,start,end){
  limitStereo(data,limiter,rate);return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
 }
 async function stabilize(track,c,onProgress){
- const sink=new CanvasSink(track,{width:48,height:48,fit:'fill',poolSize:1});let last=null,x=0,y=0;const points=[];const count=Math.min(18000,Math.max(1,Math.ceil((c.out-c.in)*12)));function* stamps(){for(let i=0;i<count;i++)yield c.in+i*(c.out-c.in)/count}
- for await(const frame of sink.canvasesAtTimestamps(stamps())){check();if(!frame)continue;const pixels=frame.canvas.getContext('2d').getImageData(0,0,48,48).data,gray=new Float32Array(48*48);for(let i=0;i<gray.length;i++)gray[i]=.299*pixels[4*i]+.587*pixels[4*i+1]+.114*pixels[4*i+2];if(last){const [dx,dy]=translation(last,gray);x+=dx;y+=dy}points.push({time:frame.timestamp,x,y});last=gray;if(points.length%24===0)onProgress(points.length/count);}
+ const size=72,sink=new CanvasSink(track,{width:size,height:size,fit:'fill',poolSize:1});let last=null,x=0,y=0,angle=0;const points=[];const count=Math.min(18000,Math.max(1,Math.ceil((c.out-c.in)*12)));function* stamps(){for(let i=0;i<count;i++)yield c.in+i*(c.out-c.in)/count}
+ for await(const frame of sink.canvasesAtTimestamps(stamps())){check();if(!frame)continue;const pixels=frame.canvas.getContext('2d').getImageData(0,0,size,size).data,gray=new Float32Array(size*size);for(let i=0;i<gray.length;i++)gray[i]=.299*pixels[4*i]+.587*pixels[4*i+1]+.114*pixels[4*i+2];if(last){const motion=motionEstimate(last,gray,size);x+=motion.x;y+=motion.y;angle+=motion.angle}points.push({time:frame.timestamp,x,y,angle});last=gray;if(points.length%24===0)onProgress(points.length/count);}
  return smoothPath(points,c.stabilization);
 }
 async function frameReader(row,res,cfg,start=row.start){
@@ -52,19 +52,20 @@ async function frameReader(row,res,cfg,start=row.start){
  if(!current)throw Error('映像フレームを読み込めません。');
  bc.globalAlpha=1;bc.drawImage(current.canvas,0,0);
  if(c.interpolation==='blend'&&!c.freezeDuration){const following=await sink.getCanvas(Math.min(c.out-1e-7,source+1/cfg.fps));if(following&&following.timestamp>current.timestamp){bc.globalAlpha=Math.max(0,Math.min(1,(source-current.timestamp)/(following.timestamp-current.timestamp)));bc.drawImage(following.canvas,0,0);bc.globalAlpha=1}}
- if(stable){const sc=stable.getContext('2d',{alpha:false}),corr=correctionAt(pathData,source);sc.save();sc.fillStyle='#000';sc.fillRect(0,0,sw,sh);sc.translate(sw/2+corr.x*sw,sh/2+corr.y*sh);sc.scale(pathData.scale,pathData.scale);sc.drawImage(blend,-sw/2,-sh/2);sc.restore()}
+ if(stable){const sc=stable.getContext('2d',{alpha:false}),corr=correctionAt(pathData,source);sc.save();sc.fillStyle='#000';sc.fillRect(0,0,sw,sh);sc.translate(sw/2+corr.x*sw,sh/2+corr.y*sh);sc.rotate(corr.angle||0);sc.scale(pathData.scale,pathData.scale);sc.drawImage(blend,-sw/2,-sh/2);sc.restore()}
  return stable||blend;
  },async close(){blend.width=blend.height=1;if(stable)stable.width=stable.height=1}};
  }catch(e){still?.close();throw e}
 }
 async function render(p,files,preview,outputPath){limiter={gain:1};
- const cfg=outputSettings(p,preview),hidden=layer=>!!p.videoTracks?.[layer]?.hidden,overlayHidden=item=>!!p.overlayTracks?.[item.layer||0]?.hidden,videoProject={...p,clips:p.clips.filter(c=>!hidden(c.layer||0)),audioClips:[]},rows=visibleSequence(videoProject),sourceAudioRows=sequence(videoProject),effects=(p.effects||[]).filter(e=>!overlayHidden(e)),texts=(p.texts||[]).filter(t=>!overlayHidden(t)),resources=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
+ const cfg=outputSettings(p,preview),hidden=layer=>!!p.videoTracks?.[layer]?.hidden,overlayHidden=item=>!!p.overlayTracks?.[item.layer||0]?.hidden,videoProject={...p,clips:p.clips.filter(c=>!hidden(c.layer||0)),audioClips:[]},rows=visibleSequence(videoProject),sourceAudioRows=sequence(videoProject),effects=(p.effects||[]).filter(e=>!overlayHidden(e)),texts=(p.texts||[]).filter(t=>!overlayHidden(t)),resources=new Map(),textBitmaps=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');
  if(!await canEncodeVideo('avc',{width:cfg.width,height:cfg.height,bitrate:cfg.bitrate})||!await canEncodeAudio('aac',{sampleRate:48000,numberOfChannels:2}))throw Error('選択したH.264/AAC設定に端末が対応していません。1080p・30fpsをお試しください。');
  const needed=new Set([...videoProject.clips,...p.audioClips||[]].filter(c=>!c.gap).map(c=>c.media));if(p.bgm.media)needed.add(p.bgm.media);
  for(const id of needed){check();const file=files.find(x=>x.id===id)?.file;if(!file)throw Error('元素材を再リンクしてください。');const metadata=p.media.find(m=>m.id===id);if(metadata?.kind==='image'){resources.set(id,{imageFile:file,metadata,audio:null,duration:5});continue}const input=open(file);activeInputs.push(input);const video=await input.getPrimaryVideoTrack(),audio=await input.getPrimaryAudioTrack();if(video&&p.clips.some(c=>c.media===id)){if(!await video.canDecode())throw Error(file.name+' の映像を端末でデコードできません。');const color=await video.getColorSpace();if(await video.hasHighDynamicRange()||['smpte2084','arib-std-b67'].includes(color.transfer))throw Error(file.name+' はHDRです。端末版の正確なトーンマッピングは未対応のため停止しました。SDR素材、またはMac版をご利用ください。');}
  const needsAudio=(p.audioClips||[]).some(c=>c.media===id)||id===p.bgm.media||sourceAudioRows.some(r=>r.clip.media===id&&!r.clip.audio?.mute&&r.clip.audio?.volume);if(audio&&needsAudio&&audio.numberOfChannels>2)throw Error('端末版の音声はモノラル・ステレオのみ対応しています。');if(audio&&needsAudio&&!await audio.canDecode())throw Error(file.name+' の音声をデコードできません。');resources.set(id,{input,video,audio:needsAudio?audio:null,duration:await input.computeDuration()});}
+ for(const text of texts)if(text.raster?.data)try{textBitmaps.set(text.id,await createImageBitmap(await(await fetch(text.raster.data)).blob()))}catch{}
  check();const estimate=await navigator.storage.estimate();const expectedBytes=(cfg.bitrate+cfg.audioBitrate)*cfg.duration/8;if(estimate.quota&&estimate.quota-estimate.usage<expectedBytes*1.2)throw Error('書き出し用の空き容量が不足しています。画質か解像度を下げてください。');root=await navigator.storage.getDirectory();root=await root.getDirectoryHandle('pve-renders',{create:true});path=outputPath;fileHandle=await root.getFileHandle(path,{create:true});handle=await fileHandle.createSyncAccessHandle();
  const stream=new WritableStream({write({data,position}){check();if(handle.write(data,{at:position})!==data.byteLength)throw Error('端末の空き容量が不足しています。');}});
  output=new Output({format:new Mp4OutputFormat({fastStart:'reserve'}),target:new StreamTarget(stream,{chunked:true,chunkSize:1024*1024})});
@@ -81,12 +82,12 @@ async function render(p,files,preview,outputPath){limiter={gain:1};
  const frame=await sessions[k].reader.frame(t);painter.draw(frame,motionTransform(row.clip,t-row.start,row.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;ctx.drawImage(processed,0,0);ctx.globalAlpha=1;
  }
  for(const e of effects){const alpha=effectAlpha(e,t);if(alpha){ctx.globalAlpha=alpha;ctx.fillStyle=e.type==='flash'?'#fff':'#000';ctx.fillRect(0,0,cfg.width,cfg.height)}}ctx.globalAlpha=1;
- for(const text of texts)drawTextCanvas(ctx,text,t,cfg.width,cfg.height);await videoSource.add(t,Math.min(1/cfg.fps,cfg.duration-t));frameIndex++;
+ for(const text of texts){const bitmap=textBitmaps.get(text.id);bitmap?drawTextRasterCanvas(ctx,text,bitmap,t,cfg.width,cfg.height):drawTextCanvas(ctx,text,t,cfg.width,cfg.height)}await videoSource.add(t,Math.min(1/cfg.fps,cfg.duration-t));frameIndex++;
  const target=Math.min(cfg.duration,frameIndex/cfg.fps);while(audioTime<target-1e-8){const end=Math.min(cfg.duration,audioTime+.25),sample=await mixAudio(sourceAudioRows,resources,p,audioTime,end);if(sample){try{await audioSource.add(sample)}finally{sample.close()}}audioTime=end;}
  if(frameIndex%5===0)progress('MP4を書き出し中',frameIndex/cfg.frames*.95);
  }
  check();progress('MP4を確定中',.96);await output.finalize();handle.flush();handle.close();handle=null;const file=await fileHandle.getFile();const verify=open(file);let videoDuration=0,audioDuration=0;try{const v=await verify.getPrimaryVideoTrack(),a=await verify.getPrimaryAudioTrack();videoDuration=await v?.computeDuration()||0;audioDuration=await a?.computeDuration()||0;const videoTolerance=Math.max(.001,1/cfg.fps);if(v?.codec!=='avc'||a?.codec!=='aac'||Math.abs(videoDuration-cfg.duration)>videoTolerance||audioDuration<cfg.duration-1/48000||audioDuration>cfg.duration+.12)throw Error('生成した動画の検証に失敗しました。');let count=0;for await(const sample of new VideoSampleSink(v).samples()){try{check();count++;if(count%30===0)progress('完成動画を検証中',.96+.025*count/cfg.frames)}finally{sample.close()}}if(count!==cfg.frames)throw Error('完成動画のフレーム数が一致しません。');let audioPackets=0;for await(const sample of new AudioSampleSink(a).samples()){sample.close();check();if(++audioPackets%200===0)progress('完成音声を検証中',.99);}}finally{verify.dispose()}
  check();success=true;return{file,path,verified:true,videoDuration,audioDuration,...cfg};
- }finally{for(const session of sessions)await session?.reader.close();if(output&&output.state!=='finalized')await output.cancel().catch(()=>{});handle?.close();if(!success&&root&&path)await root.removeEntry(path).catch(()=>{});painter?.dispose();for(const input of activeInputs)input.dispose();}
+ }finally{for(const session of sessions)await session?.reader.close();if(output&&output.state!=='finalized')await output.cancel().catch(()=>{});handle?.close();if(!success&&root&&path)await root.removeEntry(path).catch(()=>{});painter?.dispose();for(const bitmap of textBitmaps.values())bitmap.close();for(const input of activeInputs)input.dispose();}
 }
 onmessage=async({data})=>{if(data.type==='cancel'){cancelled=true;return}if(data.type!=='render')return;cancelled=false;try{const result=await render(data.project,data.files,data.preview,data.outputPath);postMessage({type:'done',result})}catch(e){postMessage({type:'error',error:e.message,cancelled:cancelled||e.name==='AbortError'})}};

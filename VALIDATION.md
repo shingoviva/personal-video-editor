@@ -1,5 +1,16 @@
 # Validation — 2026-09-21
 
+## 2.0.1 — 手ぶれ補正・フォント・再リンク・テロップ一致
+
+- 端末補正の複数領域動き推定、平行移動と回転の平滑化、HORIZON、自動クロップ率をユニット試験した。Mac側はHORIZONの2パス`vidstab`設定に高精度検出、42フレーム平滑化、ガウス最適化、bicubic補間が含まれることを確認した。
+- Webフォント5書体、利用可能なシステムフォント、Local Font Access、OTF／TTF／WOFF／WOFF2読み込みの選択経路を追加した。読み込みフォントのメタデータは`.project`保存・再読込で保持され、実データはIndexedDBから復元する。
+- 素材の再リンク候補を名前、容量、種類、尺で採点し、一致度順へ並べる試験を追加した。候補選択後も保存済み素材IDを保持する。
+- テロップのプレビューと両書き出し経路を共通Canvas描画へ統一した。1080pと4Kでラスター倍率、アンカー位置、装飾寸法が正比例することを自動試験した。
+- macOS Chromeの1600×1000画面で、Webフォント候補、システムTTFの読み込み、更新後のIndexedDB復元、装飾テロップのCanvas描画、再リンク候補の一致度順表示を操作した。1080pと4Kの実Canvas描画境界はほぼ正確に2倍となり、JavaScript例外は0件だった。既存翻訳がNotoの先頭を誤変換する問題も検出して修正した。
+- JavaScript全試験、静的ビルド検査、Pythonのcapabilities/images/layers/multitrack/creative/youtube/program-workflow/overlay-only/prores/reliability/server/validate_formats/validate_pipelineを通過した。YouTube 4K寸法、ProRes 10-bit 4:2:2、VFR、240fps、複数映像・4音声、複数テロップの全尺デコードを含む。
+
+実機Safari、iPhone 16 Pro、実写HDR、実写の回転揺れ・ローリングシャッター、長時間連続編集、第三者環境のフォント差は未検証です。
+
 ## 2.0.0 — UI再編・テロップ独立装飾
 
 - ナビゲーションを`MEDIA / VIDEO / GRAPHICS / AUDIO / ASSIST`の5領域へ再編し、動画選択では`BASIC / MOTION / COLOR / LOOKS`を右設定欄内から移動できることを確認した。別の動画を選び直しても現在の動画サブメニューを保持し、TEXTから動画を選んだ場合はBASICへ移る。

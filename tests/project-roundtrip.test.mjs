@@ -27,6 +27,7 @@ p.texts=[
 ];
 p.bgm={media:'music-bed',volume:.26,fadeIn:1.2,fadeOut:2.5};
 p.analysis=[{media:'video-main',intent:'CINEMATIC',sampleFps:3,markers:[{time:3.2,type:'motion',score:.91},{time:9.8,type:'still',score:.84}]}];
+p.fonts=[{id:'font-variety',family:'PVE Variety 1234abcd',label:'Variety Gothic',name:'variety-gothic.woff2',size:48321,type:'file'}];
 p.export={preset:'YOUTUBE',aspect:'AUTO',resolution:'4K',fps:'60',quality:'Maximum',codec:'H.264'};
 
 const expected=sanitize(structuredClone(p));
@@ -38,5 +39,6 @@ assert.equal(restored.texts.length,3);assert.equal(restored.effects.length,3);
 assert.equal(restored.videoTracks[2].hidden,true);assert.equal(restored.audioClips[0].linked,true);
 assert.equal(restored.videoTracks[1].volume,.45);assert.equal(restored.overlayTracks[2].hidden,true);assert.equal(restored.texts[2].layer,2);assert.equal(restored.effects[1].layer,1);
 assert.equal(restored.clips[0].opacityKeyframes.length,4);assert.equal(restored.clips[0].color.vignette,16);assert.equal(restored.texts[1].italic,true);
+assert.deepEqual(restored.fonts,p.fonts);
 assert.deepEqual(restored.export,{preset:'YOUTUBE',aspect:'AUTO',resolution:'4K',fps:'60',quality:'Maximum',codec:'H.264'});
 console.log('Complex project save/reload round-trip: video, audio, FX, captions, tracks and export state PASS');

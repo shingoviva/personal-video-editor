@@ -257,6 +257,7 @@ body.media-expanded .column-splitter,body.inspector-expanded .column-splitter{di
 .text-layer-list .text-layer-row>[data-text-delete]{padding:5px 2px;border:1px solid var(--border);color:#9aa494}
 body[data-step=text] #textOverlay{pointer-events:auto}
 body[data-step=text] .text-item{pointer-events:auto;cursor:text}
+.text-preview-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.font-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:8px 0}.font-actions .wide{margin-top:0!important;font-size:11px}.relink-candidates .project-option{display:grid;grid-template-columns:1fr auto;gap:4px 12px}.relink-candidates .project-option span{font:10px var(--mono);color:var(--accent)}.relink-candidates .project-option small{grid-column:1/-1}.relink-action{color:var(--orange)!important}
 .fx-chip.dragging{z-index:20;opacity:.82;box-shadow:0 8px 24px #0009;transition:none}
 .keyframe-list{display:grid;gap:5px;margin:10px 0}.keyframe-list>div{display:grid;grid-template-columns:1fr 32px;gap:5px}.keyframe-list button{display:flex;justify-content:space-between;align-items:center}.keyframe-list>div>button:last-child{justify-content:center;color:var(--muted)}
 

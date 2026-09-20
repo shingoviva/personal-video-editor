@@ -13,4 +13,5 @@ assert.equal(translate('手ぶれ補正は処理プレビューで確認'),'Chec
 setLanguage('ja');
 assert.equal(translate('Choose media'),'素材を選択');
 assert.equal(translate('Check stabilization in processed preview'),'手ぶれ補正は処理プレビューで確認');
+assert.equal(translate('Noto Sans JP · Web'),'Noto Sans JP · Web');
 console.log('JA/EN translation, dynamic phrases and language persistence: PASS');

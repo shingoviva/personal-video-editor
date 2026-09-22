@@ -6,8 +6,11 @@ export function outputSettings(p,preview=false){
  const width=2*Math.max(1,Math.round((ar>=1?edge*ar:edge)/2)),height=2*Math.max(1,Math.round((ar>=1?edge:edge/ar)/2));
  const fps=p.export.fps==='Source'?clamp(m.fps||30,1,60):clamp(p.export.fps||30,1,60);
  const duration=total(p);if(!Number.isFinite(duration)||duration<=0)throw Error('書き出し時間が無効です。');
- const youtube=p.export.preset==='YOUTUBE',audioBitrate=youtube&&['High','Maximum'].includes(p.export.quality)?320000:192000;
- return {width,height,fps,duration,frames:Math.ceil(duration*fps),bitrate:Math.round(width*height*fps*({Preview:.05,Standard:.09,High:.14,Maximum:.22}[p.export.quality]||.14)),audioBitrate};
+ const youtube=p.export.preset==='YOUTUBE',automaticAudio=youtube&&['High','Maximum'].includes(p.export.quality)?320000:192000;
+ const requestedVideo=Number(p.export.videoBitrate),requestedAudio=Number(p.export.audioBitrate);
+ const bitrate=requestedVideo>0?Math.round(clamp(requestedVideo,1,200)*1e6):Math.round(width*height*fps*({Preview:.05,Standard:.09,High:.14,Maximum:.22}[p.export.quality]||.14));
+ const audioBitrate=requestedAudio>0?Math.round(clamp(requestedAudio,96,320)*1000):automaticAudio;
+ return {width,height,fps,duration,frames:Math.ceil(duration*fps),bitrate,audioBitrate};
 }
 export function sourceTime(row,t){const c=row.clip;if(c.freezeDuration)return c.freezeAt??c.in;const nodes=(row._timing??=timing(c)).nodes;const dt=Math.max(0,t-row.start+(row.offset||0));for(let i=1;i<nodes.length;i++){const [x0,y0]=nodes[i-1],[x1,y1]=nodes[i];if(dt<=y1)return Math.min(c.out-1e-6,c.in+x0+(dt-y0)*(x1-x0)/(y1-y0));}return c.out-1e-6;}
 export function gainAt(t,duration,volume=1,fadeIn=0,fadeOut=0){return Math.max(0,volume)*Math.max(0,Math.min(1,fadeIn?t/fadeIn:1,fadeOut?(duration-t)/fadeOut:1));}

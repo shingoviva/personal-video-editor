@@ -8,6 +8,7 @@ p.aspect='9:16';assert.deepEqual([outputSettings(p).width,outputSettings(p).heig
 p.export.resolution='1440p';assert.deepEqual([outputSettings(p).width,outputSettings(p).height],[1440,2560]);
 p.export.resolution='4K';assert.deepEqual([outputSettings(p).width,outputSettings(p).height],[2160,3840]);
 p.export.preset='YOUTUBE';p.export.quality='High';assert.equal(outputSettings(p).audioBitrate,320000);
+p.export.videoBitrate='35';p.export.audioBitrate='256';assert.equal(outputSettings(p).bitrate,35000000);assert.equal(outputSettings(p).audioBitrate,256000);
 for(const curve of ['constant','linear','ease-in','ease-out','ease-in-out'])for(const speed of [.05,.1,1,20]){const c=p.clips[0];Object.assign(c,{in:2,out:7,speed,endSpeed:.2,curve,hold:.8});const row=sequence(p)[0],end=timing(c).duration;for(let t=0;t<end;t+=end/51){assert.ok(Math.abs(sourceTime(row,t)-Math.min(c.out-1e-6,c.in+sourceOffset(t,c)))<1e-8)}}
 assert.equal(gainAt(0,4,1,1,1),0);assert.equal(gainAt(2,4,.7,1,1),.7);assert.equal(gainAt(4,4,1,1,1),0);
 const data=new Float32Array(8);mixWindow(data,0,4,[new Float32Array([0,1,0,-1,0]),new Float32Array([1,0,-1,0,1])],i=>i*.5,()=>.5);assert.deepEqual([...data],[0,.25,.5,.25,.5,.25,0,-.25]);

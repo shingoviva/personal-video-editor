@@ -1,8 +1,16 @@
-# PERSONAL VIDEO EDITOR — V2 · 2.0.3
+# PERSONAL VIDEO EDITOR — V2 · 2.0.4
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**1.10.0を安定復帰点として固定し、2.0.3を自動試験とMac Chrome操作確認を通過した現在版とします。** H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+**1.10.0を安定復帰点として固定し、2.0.4を自動試験とMac Chrome操作確認を通過した現在版とします。** H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+
+## 2.0.4 — DETAILED EXPORT SETTINGS
+
+- 用途・比率・解像度・23.976〜60fps・形式・品質を一画面で指定
+- H.264の映像ビットレートとAAC音声ビットレートを自動または明示指定
+- ファイル名、実ピクセル数、フレーム数、カラー形式、音声仕様、推定容量を開始前に確認
+- 4K、高fps、比率変換、ProResの注意事項を設定に応じて表示
+- ブラウザとMac FFmpegの双方へ指定値を反映
 
 ## 2.0.3 — AUDIO LIBRARY / HELP
 

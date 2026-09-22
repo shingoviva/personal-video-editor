@@ -14,7 +14,7 @@ with tempfile.TemporaryDirectory(prefix='pve-youtube-') as tmp:
  colors=[(255,0,0,255),(0,255,0,255),(0,0,255,255)]
  texts=[{'id':f't{i}','text':f'caption {i}','start':i,'end':i+1,'size':80,'x':.5,'y':.5,'opacity':1,'motion':'pop' if i==0 else 'none','motionDuration':.2,'raster':png(value)} for i,value in enumerate(colors)]
  clip={'id':'c','media':media['id'],'in':0,'out':3,'start':0,'layer':0,'speed':1,'endSpeed':1,'curve':'constant','audio':{'volume':1},'color':{},'stabilization':'OFF'}
- project={'version':1,'media':[media],'clips':[clip],'audioClips':[],'videoTracks':[{'hidden':False} for _ in range(3)],'audioTracks':[{'volume':1} for _ in range(4)],'bgm':{},'texts':texts,'effects':[],'aspect':'16:9','export':{'preset':'YOUTUBE','fps':'30','resolution':'1080p','quality':'High','codec':'H.264'}}
+ project={'version':1,'media':[media],'clips':[clip],'audioClips':[],'videoTracks':[{'hidden':False} for _ in range(3)],'audioTracks':[{'volume':1} for _ in range(4)],'bgm':{},'texts':texts,'effects':[],'aspect':'16:9','export':{'preset':'YOUTUBE','fps':'30','resolution':'1080p','quality':'High','codec':'H.264','videoBitrate':'12','audioBitrate':'256'}}
  assert core.output_size({**project,'export':{**project['export'],'resolution':'1440p'}},media)==(2560,1440)
  assert core.output_size({**project,'export':{**project['export'],'resolution':'4K'}},media)==(3840,2160)
  result=core.render({'id':'youtube','cancel':False},project);out=core.ROOT/'exports'/result['file'];core.validate_output(out,3,True)

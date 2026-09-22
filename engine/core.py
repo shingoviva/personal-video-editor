@@ -39,7 +39,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.0.3','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.0.4','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -391,8 +391,11 @@ def output_encoding(export,preview,crf):
  profile=None if preview else profiles.get(export.get('codec'))
  if profile:
   return {'extension':'.mov','pixel':'yuv422p10le','label':export.get('codec'),'video':['-c:v','prores_ks','-profile:v',profile,'-pix_fmt','yuv422p10le','-vendor','apl0'],'audio':['-c:a','pcm_s24le','-ar','48000']}
- audio_rate='320k' if export.get('preset')=='YOUTUBE' and export.get('quality') in ('High','Maximum') and not preview else '192k'
- return {'extension':'.mp4','pixel':'yuv420p','label':'H.264','video':['-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2','-crf',str(crf),'-pix_fmt','yuv420p'],'audio':['-c:a','aac','-b:a',audio_rate,'-ar','48000']}
+ requested_video=number(export.get('videoBitrate'),0,0,200) if export.get('videoBitrate') not in (None,'','Auto') else 0
+ requested_audio=number(export.get('audioBitrate'),0,0,320) if export.get('audioBitrate') not in (None,'','Auto') else 0
+ audio_rate=f'{round(requested_audio)}k' if requested_audio else ('320k' if export.get('preset')=='YOUTUBE' and export.get('quality') in ('High','Maximum') and not preview else '192k')
+ rate=['-b:v',f'{requested_video:g}M','-maxrate',f'{requested_video*1.35:g}M','-bufsize',f'{requested_video*2:g}M'] if requested_video and not preview else ['-crf',str(crf)]
+ return {'extension':'.mp4','pixel':'yuv420p','label':'H.264','video':['-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2',*rate,'-pix_fmt','yuv420p'],'audio':['-c:a','aac','-b:a',audio_rate,'-ar','48000']}
 
 def stabilization_filters(mode,trf='motion.trf'):
  """High accuracy detection plus conservative, profile-specific camera smoothing."""

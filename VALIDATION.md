@@ -1,5 +1,12 @@
 # Validation — 2026-09-21
 
+## 2.0.4 — 詳細書き出し設定
+
+- Mac ChromeでYouTube 4K・59.94fps・映像60Mbps・音声320kbps・任意ファイル名の連動を確認
+- 3840×2160、7,193フレーム、推定容量約905MBの事前表示を確認
+- ブラウザの明示ビットレート計算とMac FFmpegのH.264/AAC引数を検証
+- JavaScript全テスト、YouTube、ProRes、ネイティブ動画・多重音声テスト通過
+
 ## 2.0.3 — AUDIO素材削除とヘルプ
 
 - Mac ChromeでAUDIO LIBRARYの音声素材削除、確認画面、参照クリップ削除を確認

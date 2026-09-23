@@ -5,7 +5,7 @@ import {imageBitmap} from './image-media.js';
 import {renderer} from './preview.js';
 import {sequence,visibleSequence,timing,sourceOffset,total} from './model.js';
 import {outputSettings,sourceTime,gainAt,held,mixWindow,limitStereo} from './mobile-model.js';
-import {motionEstimate,smoothPath,correctionAt} from './mobile-stabilize.js';
+import {motionEstimate,smoothPath,correctionAt,stabilizationSampleCount} from './mobile-stabilize.js';
 import {drawTextCanvas,drawTextRasterCanvas} from './text-render.js';
 import {motionTransform} from './motion-transform.js';
 import {frameAtTimestamp} from './frame-source.js';
@@ -30,7 +30,7 @@ export async function mixAudio(rows,resources,p,start,end){
  limitStereo(data,limiter,rate);return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
 }
 async function stabilize(track,c,onProgress){
- const size=72,sink=new CanvasSink(track,{width:size,height:size,fit:'fill',poolSize:1});let last=null,x=0,y=0,angle=0;const points=[];const count=Math.min(18000,Math.max(1,Math.ceil((c.out-c.in)*12)));function* stamps(){for(let i=0;i<count;i++)yield c.in+i*(c.out-c.in)/count}
+ const size=72,sink=new CanvasSink(track,{width:size,height:size,fit:'fill',poolSize:1});let last=null,x=0,y=0,angle=0;const points=[];const count=stabilizationSampleCount(c.out-c.in);function* stamps(){for(let i=0;i<count;i++)yield c.in+i*(c.out-c.in)/count}
  for await(const frame of sink.canvasesAtTimestamps(stamps())){check();if(!frame)continue;const pixels=frame.canvas.getContext('2d').getImageData(0,0,size,size).data,gray=new Float32Array(size*size);for(let i=0;i<gray.length;i++)gray[i]=.299*pixels[4*i]+.587*pixels[4*i+1]+.114*pixels[4*i+2];if(last){const motion=motionEstimate(last,gray,size);x+=motion.x;y+=motion.y;angle+=motion.angle}points.push({time:frame.timestamp,x,y,angle});last=gray;if(points.length%24===0)onProgress(points.length/count);}
  return smoothPath(points,c.stabilization);
 }

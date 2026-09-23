@@ -336,3 +336,10 @@ dialog:has(.export-review){width:min(760px,94vw)}
 .export-review{margin-top:12px;padding:13px;border:1px solid #647257;border-radius:7px;background:linear-gradient(135deg,#1d261b,#111611)}.export-review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 18px}.export-review-grid div{display:grid;grid-template-columns:82px minmax(0,1fr);gap:7px}.export-review-grid span{color:#7f8c83;font-size:9px}.export-review-grid strong{overflow-wrap:anywhere;color:#e3e9e3;font:10px var(--mono);font-weight:500}.export-review>p{margin:10px 0 0;font-size:9px!important}
 .export-warnings{display:grid;gap:5px;margin-top:9px}.export-warnings p{margin:0;padding:7px 9px;border:1px solid #654c32;border-radius:5px;background:#6e44121c;color:#ddb47f;font-size:10px!important;line-height:1.45!important}
 @media(max-width:600px){.export-project{display:grid}.export-project span{white-space:normal}.export-review-grid{grid-template-columns:1fr}.export-section{padding:10px}}
+
+/* Align overlay lane labels with the pinned ruler and video track typography. */
+.track-labels-inner>span:first-child{height:34px!important;padding-top:10px!important}
+.track-labels-inner>.overlay-head{grid-template-columns:24px 24px minmax(0,1fr)!important;gap:3px}
+.overlay-head strong{font:10px var(--mono)!important;font-weight:500!important;letter-spacing:0}
+.overlay-head button{height:24px;align-self:center}
+.overlay-head small{display:none!important}

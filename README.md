@@ -1,8 +1,15 @@
-# PERSONAL VIDEO EDITOR — V2 · 2.0.7
+# PERSONAL VIDEO EDITOR — V2 · 2.0.8
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**1.10.0を安定復帰点として固定し、2.0.7を自動試験とMac Chrome操作確認を通過した現在版とします。** H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+**1.10.0を安定復帰点として固定し、2.0.8を自動試験とMac Chrome操作確認を通過した現在版とします。** H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+
+## 2.0.8 — SLOW MOTION & STABILIZATION
+
+- Macの高品質スローをUMH動き探索へ変更し、動きベクトルの精度を優先
+- 手ぶれ補正の解析間隔を4フレームから2フレームに短縮
+- 端末版の補正解析を毎秒12枚から18枚へ増加（長尺は上限18,000サンプル）
+- 高品質処理は処理時間・端末負荷が増えます。実写のvid.stab補正は未検証
 
 ## 2.0.7 — OVERLAY TIMELINE EXTENSION
 

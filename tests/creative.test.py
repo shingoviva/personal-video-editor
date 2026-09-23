@@ -46,7 +46,7 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  first,last=raw(.3),raw(1.5);delta=[abs(a-b) for a,b in zip(first,last)]
  assert sum(delta)/len(delta)<2 and max(delta)<16,('Frozen frame changed',sum(delta)/len(delta),max(delta))
  from color_engine import grade
- q['clips']=[clip(red,0)];q['clips'][0]['color']={'temperature':-25,'warmth':18,'brilliance':24,'brightness':-8,'blackPoint':12,'contrast':28,'saturation':-18,'sharpness':12,'definition':15,'noiseReduction':8,'curveMaster':[0,.2,.54,.82,1],'curveRed':[0,.27,.52,.76,1],'curveGreen':[0,.24,.5,.74,1],'curveBlue':[0,.22,.48,.72,1]}
+ q['clips']=[clip(red,0)];q['clips'][0]['color']={'temperature':-25,'warmth':18,'brilliance':24,'brightness':-8,'blackPoint':12,'contrast':28,'saturation':-18,'sharpness':12,'definition':15,'noiseReduction':8,'curveMaster':[[0,0],[.18,.08],[.43,.62],[.71,.79],[1,1]],'curveRed':[[0,0],[.32,.29],[.68,.72],[1,1]],'curveGreen':[[0,0],[.27,.23],[.74,.76],[1,1]],'curveBlue':[[0,0],[.21,.15],[.63,.68],[1,1]]}
  out=render(q,'look');actual=pixel(out,.5);expected=grade([253/255,0,0],q['clips'][0]['color'])
  assert max(abs(a-v*255) for a,v in zip(actual,expected))<15,(actual,expected)
  print('Native V2 alpha, effects, freeze, RGB LUT and browser-rasterized Japanese text: full MP4 decode PASS')

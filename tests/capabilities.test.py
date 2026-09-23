@@ -23,4 +23,8 @@ with tempfile.TemporaryDirectory(prefix='pve-caps-') as tmp:
  assert 'accuracy=15' in detect and 'stepsize=2' in detect
  assert 'smoothing=42' in transform and 'optalgo=gauss' in transform and 'interpol=bicubic' in transform
  assert 'me=umh' in core.motion_interpolation_filter(60) and 'search_param=32' in core.motion_interpolation_filter(60)
+ aggressive_detect,aggressive_transform=core.stabilization_filters('AGGRESSIVE')
+ assert 'shakiness=10' in aggressive_detect and 'smoothing=72' in aggressive_transform and 'zoomspeed=0.025' in aggressive_transform
+ max_slow=core.motion_interpolation_filter(60,True)
+ assert 'mb_size=8' in max_slow and 'search_param=64' in max_slow
  print('Mac capability preflight: H.264, refined stabilization sampling, high-accuracy slow motion, HDR, text and ProRes requirements PASS')

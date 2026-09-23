@@ -39,14 +39,14 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.0.8','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.1.0-alpha.1','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
  clips=clips if clips is not None else project.get('clips',[]);caps=caps or capabilities();missing=[]
  if not caps.get('ready'):missing.append('H.264（libx264）')
  if any(c.get('stabilization','OFF')!='OFF' and not c.get('freezeDuration') for c in clips if not c.get('gap')) and not caps.get('stabilization'):missing.append('手ぶれ補正（vidstab）')
- if any(c.get('interpolation')=='motion' for c in clips if not c.get('gap')) and not caps.get('motionInterpolation'):missing.append('高品質スロー（minterpolate）')
+ if any(c.get('interpolation') in ('motion','motion-max') for c in clips if not c.get('gap')) and not caps.get('motionInterpolation'):missing.append('高品質スロー（minterpolate）')
  if project.get('export',{}).get('codec','H.264').startswith('ProRes') and not caps.get('prores'):missing.append('Apple ProRes（prores_ks）')
  if any(MEDIA.get(c.get('media'),{}).get('hdr') for c in clips if not c.get('gap')) and not caps.get('hdr'):missing.append('HDR→SDR（zscale / tonemap）')
  texts=[t for t in project.get('texts',[]) if str(t.get('text',''))]
@@ -397,11 +397,13 @@ def output_encoding(export,preview,crf):
  rate=['-b:v',f'{requested_video:g}M','-maxrate',f'{requested_video*1.35:g}M','-bufsize',f'{requested_video*2:g}M'] if requested_video and not preview else ['-crf',str(crf)]
  return {'extension':'.mp4','pixel':'yuv420p','label':'H.264','video':['-c:v','libx264','-preset','veryfast' if preview else 'fast','-threads','2',*rate,'-pix_fmt','yuv420p'],'audio':['-c:a','aac','-b:a',audio_rate,'-ar','48000']}
 
-def motion_interpolation_filter(fps):
+def motion_interpolation_filter(fps, aggressive=False):
  # UMH searches a wider, less regular motion field than EPZS. This path is
  # explicitly selected as high-quality slow motion, so spend CPU to reduce
  # block-vector errors around diagonal and irregular movement.
- return f'minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=umh:mb_size=16:search_param=32:vsbmc=1:scd=fdiff:scd_threshold=10'
+ search=64 if aggressive else 32
+ block=8 if aggressive else 16
+ return f'minterpolate=fps={fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:me=umh:mb_size={block}:search_param={search}:vsbmc=1:scd=fdiff:scd_threshold=10'
 
 def stabilization_filters(mode,trf='motion.trf'):
  """High accuracy detection plus conservative, profile-specific camera smoothing."""
@@ -409,6 +411,7 @@ def stabilization_filters(mode,trf='motion.trf'):
   'WEAK':(3,6,0.28),'MEDIUM':(5,14,0.20),'STRONG':(8,28,0.12),
   'HANDHELD':(7,10,0.18),'NATURAL':(5,12,0.16),'GIMBAL':(6,24,0.10),'HORIZON':(8,42,0.07),'TRIPOD':(9,50,0.06)
  }
+ profiles['AGGRESSIVE']=(10,72,0.025)
  shakiness,smoothing,zoomspeed=profiles.get(mode,profiles['MEDIUM'])
  detect=f'vidstabdetect=shakiness={shakiness}:accuracy=15:stepsize=2:mincontrast=0.15:show=0:result={trf}'
  transform=f'vidstabtransform=input={trf}:smoothing={smoothing}:optalgo=gauss:optzoom=2:zoomspeed={zoomspeed}:crop=black:interpol=bicubic'
@@ -476,7 +479,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    expr=f'{duration:.9f}'
    for (x0,y0),(x1,y1) in reversed(list(zip(nodes,nodes[1:]))):expr=f'if(lt(T,{x1:.9f}),{y0:.9f}+(T-{x0:.9f})*{(y1-y0)/(x1-x0):.9f},{expr})'
    vf.append(f"setpts='{expr}/TB'")
-   if c.get('interpolation')=='motion':vf.append(motion_interpolation_filter(fps))
+   if c.get('interpolation') in ('motion','motion-max'):vf.append(motion_interpolation_filter(fps,c.get('interpolation')=='motion-max'))
    elif c.get('interpolation')=='blend':vf.append(f'framerate=fps={fps}:interp_start=0:interp_end=255:scene=100')
    else:vf.append(f'fps={fps}')
    # Linux zscale cannot infer a conversion path from RGB stills or untagged

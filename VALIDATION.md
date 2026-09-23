@@ -1,5 +1,14 @@
 # Validation — 2026-09-21
 
+## 2.0.5 — iPhone相当カラー調整とトーンカーブ
+
+- 全JavaScriptテスト、静的ビルド検査を通過
+- Mac Chromeで20個のカラー項目表示、GPU初期化、トーンカーブの実ドラッグ更新を確認
+- ブラウザとMac FFmpegのRGB変換を同じ入力値で比較し一致を確認
+- 新しいカラー、カーブ、精細度、ノイズ除去を含むH.264/AAC MP4をFFmpegで生成し、全フレームデコードを確認
+- Python動画処理テスト（H.264、ProRes、レイヤー、音声、テロップ、FX、静止画、YouTube）を通過
+- iPhone 16 Pro Safariと実写HDR素材の受け入れ試験は未実施
+
 ## 2.0.4 — 詳細書き出し設定
 
 - Mac ChromeでYouTube 4K・59.94fps・映像60Mbps・音声320kbps・任意ファイル名の連動を確認

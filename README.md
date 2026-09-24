@@ -1,13 +1,14 @@
-# PERSONAL VIDEO EDITOR — V2 · 2.1.0-alpha.1 (EXPERIMENTAL)
+# PERSONAL VIDEO EDITOR — V2 · 2.1.0
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**安定版は `v2.0.8-stable`（commit `888a479`）です。このブランチは2.1.0-alpha.1の補正実験版です。** H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+**v2.1.0 公開版**です。H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
 
-## 2.1.0-alpha.1 — AGGRESSIVE MOTION EXPERIMENTS
+## 2.1.0 — AGGRESSIVE MOTION & CUSTOM SPEED
 
 - スロー補間に実験的なMaximumモードを追加しました。FFmpegのUMH探索範囲を32から64、ブロック幅を16から8へ変更し、処理負荷と解析時間を増やして細かな動きを探索します。これはAIモデルによる補間ではありません。
 - 手ぶれ補正にAGGRESSIVEモードを追加しました。長い時間窓でカメラ軌跡を平滑化し、適応ズームを強めます。揺れをより抑えますが、画角が狭くなる場合があります。
+- 動画速度と速度ランプに0.05〜20×の任意小数を入力でき、数値は丸めずプロジェクト保存・書き出しへ引き継ぎます。スライダーは微調整用に0.01×刻みです。
 - 既存の高品質・自然な設定はそのまま選択できます。実写素材での画質・処理時間・クロップ比較はこれから行います。AI補間（RIFE）とジャイロ補正（Gyroflow等）はライセンス・モデル配布・M2実機評価後に別エンジンとして検討します。
 
 ## 2.0.8 — SLOW MOTION & STABILIZATION

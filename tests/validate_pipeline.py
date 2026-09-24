@@ -33,6 +33,8 @@ test('cut_crop_audio',lambda:render(p))
 for speed in (.05,20):
  q=copy.deepcopy(p);q['clips'][0].update(speed=speed,out=.5 if speed==.05 else 1.5)
  test('speed_'+str(speed),lambda q=q:render(q))
+q=copy.deepcopy(p);q['clips'][0].update(speed=1.2375,out=.8)
+test('speed_custom_decimal',lambda:render(q))
 q=copy.deepcopy(p);q['clips'][0].update(speed=.1,endSpeed=8,curve='ease-in-out');test('ramp_audio_sync',lambda:render(q))
 caps=core.capabilities()
 q=copy.deepcopy(p);q['clips'][0].update(speed=.3,interpolation='blend',hold=.5);q['clips'][0]['color']={'exposure':.4,'contrast':20,'shadows':10,'temperature':-20,'vibrance':10};q['texts']=[{'text':"PERSONAL : 50% 'test' \\ 中文",'start':0,'end':2,'fade':.2,'size':30,'x':.5,'y':.8,'opacity':1,'font':'Sans','raster':{'data':text_png(),'width':320,'height':120}}] if caps.get('textRaster') else [];test('blend_color_hold'+('_text' if q['texts'] else ''),lambda:render(q));results['text_capability']={'pass':True,'supported':bool(caps.get('text')),'browserRaster':bool(caps.get('textRaster')),'drawtext':bool(caps.get('drawtext'))}

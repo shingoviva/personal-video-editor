@@ -343,3 +343,4 @@ dialog:has(.export-review){width:min(760px,94vw)}
 .overlay-head strong{font:10px var(--mono)!important;font-weight:500!important;letter-spacing:0}
 .overlay-head button{height:24px;align-self:center}
 .overlay-head small{display:none!important}
+.speed-range-wrap{margin:18px 2px 8px}.speed-range-wrap input[type=range]{display:block;width:100%;height:18px;accent-color:var(--accent);cursor:ew-resize;touch-action:pan-y}.speed-range-labels{display:grid;grid-template-columns:1fr 1fr 1fr;margin-top:3px;color:var(--muted);font:10px var(--mono)}.speed-range-labels span:nth-child(2){text-align:center;color:var(--accent)}.speed-range-labels span:last-child{text-align:right}

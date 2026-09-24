@@ -1,8 +1,12 @@
-# PERSONAL VIDEO EDITOR — V2 · 2.1.0
+# PERSONAL VIDEO EDITOR — V2 · 2.1.1
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**v2.1.0 公開版**です。H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+**v2.1.1 公開版**です。H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+
+## 2.1.1 — CONTINUOUS SPEED SLIDER
+
+- Motionのプリセット速度ボタンを、0.05〜20×を滑らかに選べる対数スライダーへ置き換えました。1×を中央に置き、速度の直接入力も維持します。
 
 ## 2.1.0 — AGGRESSIVE MOTION & CUSTOM SPEED
 

@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
 import {textureRevision} from '../dist/preview.js';
+import {readFile} from 'node:fs/promises';
+
+const app=await readFile(new URL('../dist/app.js',import.meta.url),'utf8');
+assert.match(app,/if\(!duration\(\)\)\{video\.pause\(\);video\.playbackRate=1;/,'empty project stops the source decoder');
+assert.match(app,/if\(!c\|\|c\.gap\)\{video\.pause\(\);video\.playbackRate=1;painter\?\.black\(\)/,'gaps and missing timeline clips cannot leave a moving preview frame');
+assert.match(app,/if\(!c\|\|c\.gap\)\{video\.pause\(\);video\.playbackRate=1;return true\}/,'a pending media load rechecks timeline presence before playback');
 
 assert.equal(textureRevision({width:1920,height:1080}),null,'mutable canvases must upload on every draw');
 const video={readyState:4,currentTime:0,getVideoPlaybackQuality:()=>({totalVideoFrames:1})};

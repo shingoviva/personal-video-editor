@@ -13,6 +13,6 @@ export function waitForMedia(media,event,{signal,timeout=20000,ready}={}){
   });
 }
 export async function seekMedia(media,time,options={}){
-  if(Math.abs(media.currentTime-time)<.00001&&media.readyState>=2)return;
+  if(Math.abs(media.currentTime-time)<.00001&&media.readyState>=2&&!media.seeking)return;
   const pending=waitForMedia(media,'seeked',options);media.currentTime=time;await pending;
 }

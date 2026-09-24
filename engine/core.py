@@ -29,6 +29,26 @@ def opacity_expression(clip,duration,offset=0):
   u=f'max(0,min(1,(({x})-{a})/{max(1e-6,b-a)}))';smooth=f'({u})*({u})*(3-2*({u}))';value=f'({av}+({bv-av})*({smooth}))';expr=f'if(lt({x},{b}),{value},{expr})'
  return f'if(lt({x},{points[0][0]}),{points[0][1]},{expr})'
 
+def keyframe_expression(points,duration,maximum=3,time_expr='t'):
+ values=[]
+ for point in points[:32]:
+  if isinstance(point,dict):values.append((number(point.get('time'),0,0,duration),number(point.get('value'),1,0,maximum)))
+ values=sorted(dict(values).items())
+ if not values:return '1'
+ expr=str(values[-1][1])
+ for (a,av),(b,bv) in reversed(list(zip(values,values[1:]))):
+  u=f'max(0,min(1,(({time_expr})-{a:.9f})/{max(1e-6,b-a):.9f}))';smooth=f'({u})*({u})*(3-2*({u}))';expr=f'if(lt({time_expr},{b:.9f}),({av:.9f}+({bv-av:.9f})*({smooth})),{expr})'
+ return f'if(lt({time_expr},{values[0][0]:.9f}),{values[0][1]:.9f},{expr})'
+
+def scale_keyframe_expression(clip,duration,nodes):
+ points=clip.get('scaleKeyframes',[])[:32]
+ if not points:return None
+ # Crop runs before setpts, so convert its source-time T to timeline-local time.
+ local=str(nodes[-1][1])
+ for (x0,y0),(x1,y1) in reversed(list(zip(nodes,nodes[1:]))):
+  slope=(y1-y0)/(x1-x0);local=f'if(lt(t,{x1:.9f}),{y0:.9f}+(t-{x0:.9f})*{slope:.9f},{local})'
+ return keyframe_expression(points,duration,3,local)
+
 def ratio(s):
  try:
   a,b=str(s).split('/');return float(a)/float(b)
@@ -39,7 +59,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.1.2','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.1.3','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -464,12 +484,12 @@ def render(job,project,preview=False,_token=None,_size=None):
     vf+=['select=eq(n\\,0)']
    if m.get('kind')=='image':vf+=['format=rgba','premultiply=inplace=1','format=rgb24']
    scale=number(c.get('scale'),1,1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1);ar=w/h
-   preset=c.get('motionPreset','none');amount=number(c.get('motionAmount'),.12,0,.5);progress=f'min(max(t/{max(source_duration,.001):.9f},0),1)';ease=f'({progress})*({progress})*(3-2*({progress}))';scale_expr=str(scale);x_expr=str(x);y_expr=str(y)
+   preset=c.get('motionPreset','none');amount=number(c.get('motionAmount'),.12,0,.5);progress=f'min(max(t/{max(source_duration,.001):.9f},0),1)';ease=f'({progress})*({progress})*(3-2*({progress}))';scale_expr=scale_keyframe_expression(c,duration,nodes) or str(scale);x_expr=str(x);y_expr=str(y)
    if preset=='pan-left':x_expr=f'max(0,min(1,{x}+{amount}*(.5-({ease}))))'
    elif preset=='pan-right':x_expr=f'max(0,min(1,{x}+{amount}*(({ease})-.5)))'
    elif preset=='pan-up':y_expr=f'max(0,min(1,{y}+{amount}*(.5-({ease}))))'
    elif preset=='pan-down':y_expr=f'max(0,min(1,{y}+{amount}*(({ease})-.5)))'
-   if preset in ('push-in','pull-out'):
+   if preset in ('push-in','pull-out') and not c.get('scaleKeyframes'):
     frame_progress=f'min(max(on/{max(1,duration*fps-1):.9f},0),1)';frame_ease=f'({frame_progress})*({frame_progress})*(3-2*({frame_progress}))'
     zoom=f'min(3,{scale}*(1+{amount}*({frame_ease})))' if preset=='push-in' else f'min(3,{scale}*(1+{amount}*(1-({frame_ease}))))'
     vf.extend([f"zoompan=z='{zoom}':x='(iw-iw/zoom)*{x}':y='(ih-ih/zoom)*{y}':d=1:s={w}x{h}:fps={fps}",'setsar=1'])
@@ -510,8 +530,9 @@ def render(job,project,preview=False,_token=None,_size=None):
     s=pieces[0][2]
     graph.append(f'[{audio_index}:a]asetpts=PTS-STARTPTS,apad=pad_dur=1,{atempo(s)},volume={volume},apad,atrim=duration={duration+hold},aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,asetpts=N/SR/TB[mix]')
    else:graph.append(f'anullsrc=r=48000:cl=stereo,atrim=duration={duration+hold}[mix]')
-   fadein=number(audio.get('fadeIn'),0,0,duration/2);fadeout=number(audio.get('fadeOut'),0,0,duration/2)
-   graph.append(f'[mix]afade=t=in:d={max(.001,fadein)},afade=t=out:st={max(0,duration+hold-fadeout)}:d={max(.001,fadeout)}[a]')
+   fadein=number(audio.get('fadeIn'),0,0,duration/2);fadeout=number(audio.get('fadeOut'),0,0,duration/2);gain_keys=audio.get('gainKeyframes',[])
+   gain_filter=f"volume='{keyframe_expression(gain_keys,duration+hold,2,'t')}':eval=frame," if gain_keys else ''
+   graph.append(f'[mix]{gain_filter}afade=t=in:d={max(.001,fadein)},afade=t=out:st={max(0,duration+hold-fadeout)}:d={max(.001,fadeout)}[a]')
    offset,window_duration=c['_window']
    graph[0]=graph[0].replace('[v]',f',trim=start={offset}:duration={window_duration},setpts=PTS-STARTPTS[v]')
    graph[-1]=graph[-1].replace('[a]',f',atrim=start={offset}:duration={window_duration},asetpts=PTS-STARTPTS[a]')
@@ -590,7 +611,9 @@ def render(job,project,preview=False,_token=None,_size=None):
   args=['-i',joined];bg=MEDIA.get(bgm.get('media'));graph=[]
   if bg:
    args+=['-stream_loop','-1','-i',bg['path']];vol=number(bgm.get('volume'),.3,0,2);fi=number(bgm.get('fadeIn'),0,0,total/2);fo=number(bgm.get('fadeOut'),0,0,total/2)
-   graph=[f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]','[0:a][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]'];args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
+   bgexpr=keyframe_expression(bgm.get('gainKeyframes',[]),total,2,'t') if bgm.get('gainKeyframes') else None
+   automation=f"volume='{bgexpr}':eval=frame," if bgexpr else ''
+   graph=[f'[1:a]volume={vol},{automation}atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]','[0:a][bg]amix=inputs=2:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]'];args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']
   independent=render_tracks(job,project,audio_clips,work,total)
   video_audio=[];ends=[0.,0.,0.]
   if not any(t.get('solo') for t in project.get('audioTracks',[])):
@@ -604,7 +627,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    args=['-i',joined];graph=[];labels=['[0:a]'];index=1
    if bg:
     args+=['-stream_loop','-1','-i',bg['path']]
-    graph.append(f'[1:a]volume={vol},atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]');labels.append('[bg]');index+=1
+    graph.append(f'[1:a]volume={vol},{automation}atrim=duration={total},afade=t=in:d={max(fi,.001)},afade=t=out:st={total-fo}:d={max(fo,.001)}[bg]');labels.append('[bg]');index+=1
    for path in mixed_tracks:args+=['-i',path];labels.append(f'[{index}:a]');index+=1
    graph.append(''.join(labels)+f'amix=inputs={len(labels)}:duration=first:normalize=0,alimiter=limit=0.95:level=0:latency=1[a]')
    args+=['-filter_complex',';'.join(graph),'-map','0:v','-map','[a]']

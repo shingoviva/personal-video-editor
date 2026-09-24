@@ -13,7 +13,7 @@ export function outputSettings(p,preview=false){
  return {width,height,fps,duration,frames:Math.ceil(duration*fps),bitrate,audioBitrate};
 }
 export function sourceTime(row,t){const c=row.clip;if(c.freezeDuration)return c.freezeAt??c.in;const nodes=(row._timing??=timing(c)).nodes;const dt=Math.max(0,t-row.start+(row.offset||0));for(let i=1;i<nodes.length;i++){const [x0,y0]=nodes[i-1],[x1,y1]=nodes[i];if(dt<=y1)return Math.min(c.out-1e-6,c.in+x0+(dt-y0)*(x1-x0)/(y1-y0));}return c.out-1e-6;}
-export function gainAt(t,duration,volume=1,fadeIn=0,fadeOut=0){return Math.max(0,volume)*Math.max(0,Math.min(1,fadeIn?t/fadeIn:1,fadeOut?(duration-t)/fadeOut:1));}
+export function gainAt(t,duration,volume=1,fadeIn=0,fadeOut=0,keyframes=[]){let keyed=1;const points=(keyframes||[]).filter(k=>Number.isFinite(+k.time)&&Number.isFinite(+k.value)).map(k=>({time:Math.max(0,+k.time),value:Math.max(0,Math.min(2,+k.value))})).sort((a,b)=>a.time-b.time);if(points.length){if(t<=points[0].time)keyed=points[0].value;else if(t>=points.at(-1).time)keyed=points.at(-1).value;else for(let i=1;i<points.length;i++)if(t<=points[i].time){const a=points[i-1],b=points[i],u=Math.max(0,Math.min(1,(t-a.time)/Math.max(1e-6,b.time-a.time))),e=u*u*(3-2*u);keyed=a.value+(b.value-a.value)*e;break}}return Math.max(0,volume)*keyed*Math.max(0,Math.min(1,fadeIn?t/fadeIn:1,fadeOut?(duration-t)/fadeOut:1));}
 export function held(row,t){return !!row.clip.freezeDuration||t-row.start+(row.offset||0)>=timing(row.clip).nodes.at(-1)[1];}
 // Stereo resampling. Fast playback uses a short windowed-sinc low-pass filter
 // to suppress fold-back aliasing; ordinary playback keeps the cheaper linear path.

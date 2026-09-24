@@ -40,7 +40,9 @@ def render_tracks(job,project,clips,work,total,track_key='audioTracks',layers=4,
    listing=folder/'pieces.txt';listing.write_text(''.join(f"file '{p.name}'\n" for p in segments));joined=folder/'remapped.wav'
    core.run(job,['-f','concat','-safe','0','-i',listing,'-c','copy',joined],duration,.9,0)
    fi=core.number(audio.get('fadeIn'),0,0,(duration+hold)/2);fo=core.number(audio.get('fadeOut'),0,0,(duration+hold)/2);volume=gain*core.number(audio.get('volume'),1,0,2)
-   af=f'volume={volume},apad,atrim=duration={duration+hold}'
+   af=f'volume={volume},'
+   if audio.get('gainKeyframes'):af+=f"volume='{core.keyframe_expression(audio['gainKeyframes'],duration+hold,2,'t')}':eval=frame,"
+   af+=f'apad,atrim=duration={duration+hold}'
    if fi:af+=f',afade=t=in:d={fi}'
    if fo:af+=f',afade=t=out:st={duration+hold-fo}:d={fo}'
    af+=f',atrim=start={offset}:duration={d},asetpts=N/SR/TB,apad,atrim=duration={d}'

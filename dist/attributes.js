@@ -1,4 +1,4 @@
-export const attributeGroups={color:['color','lookName','lookAmount'],crop:['scale','x','y'],motion:['speed','endSpeed','curve','stabilization','interpolation'],visual:['opacity','opacityKeyframes','fadeIn','fadeOut'],audio:['audio']};
+export const attributeGroups={color:['color','lookName','lookAmount'],crop:['scale','scaleKeyframes','x','y'],motion:['speed','endSpeed','curve','stabilization','interpolation'],visual:['opacity','opacityKeyframes','fadeIn','fadeOut'],audio:['audio']};
 export const textAttributeKeys=['font','italic','align','weight','color','lineColors','accentWords','accentColor','outline','outlineColor','outerOutline','outerOutlineColor','shadow','shadowColor','shadowOpacity','shadowBlur','shadowX','shadowY','box','boxColor','boxOpacity','boxPadding','boxRadius','size','letterSpacing','lineHeight','x','y','opacity','fadeIn','fadeOut','motion','motionDuration'];
 export function pasteTextAttributes(target,source){
  if(!target||!source)return false;

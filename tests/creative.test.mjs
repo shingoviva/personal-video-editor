@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {clip,project,sequence,timing,compileTimeline,splitClip,sanitize} from '../dist/model.js';
-import {clipAlpha,opacityAt,effectAlpha,textPose,frozenClip} from '../dist/creative.js';
+import {clipAlpha,opacityAt,scaleAt,effectAlpha,textPose,frozenClip} from '../dist/creative.js';
 import {sourceTime,held} from '../dist/mobile-model.js';
 import {lookPresets,gradeRGB,adaptiveCinematic} from '../dist/look.js';
 const m={id:'movie',duration:10,kind:'video'},p=project();p.media=[m];p.clips=[{...clip(m),start:0,layer:0}];
@@ -10,7 +10,7 @@ let row=sequence(p).find(r=>r.clip===still);assert.equal(row.end,5);assert.equal
 still.freezeDuration=4;assert.equal(sequence(p).find(r=>r.clip===still).end,7);
 assert.equal(sanitize(JSON.parse(JSON.stringify(p))).clips[1].freezeDuration,4);
 still.fadeIn=1;still.fadeOut=1;row=sequence(p).find(r=>r.clip===still);assert.equal(clipAlpha(row,3),0);assert.equal(clipAlpha(row,3.5),.5);assert.equal(clipAlpha(row,6.5),.5);
-still.fadeIn=still.fadeOut=0;still.opacityKeyframes=[{time:0,value:0},{time:2,value:1},{time:4,value:0}];assert.equal(opacityAt(still,0,4),0);assert.equal(opacityAt(still,1,4),.5);assert.equal(opacityAt(still,2,4),1);assert.equal(opacityAt(still,3,4),.5);assert.equal(clipAlpha(row,4),.5);
+still.fadeIn=still.fadeOut=0;still.opacityKeyframes=[{time:0,value:0},{time:2,value:1},{time:4,value:0}];assert.equal(opacityAt(still,0,4),0);assert.equal(opacityAt(still,1,4),.5);assert.equal(opacityAt(still,2,4),1);assert.equal(opacityAt(still,3,4),.5);assert.equal(clipAlpha(row,4),.5);still.scale=1;still.scaleKeyframes=[{time:0,value:1},{time:2,value:2.5},{time:4,value:1}];assert.equal(scaleAt(still,0,4),1);assert.equal(scaleAt(still,1,4),1.75);assert.equal(scaleAt(still,2,4),2.5);assert.equal(scaleAt(still,3,4),1.75);
 const e={type:'flash',start:2,duration:1,strength:.8};assert.equal(effectAlpha(e,2),.8);assert.equal(effectAlpha(e,2.5),.4);assert.equal(effectAlpha(e,3),0);e.type='black-out';assert.equal(effectAlpha(e,2),0);
 const heldIn={type:'black-in',start:0,duration:3,hold:2,strength:1};assert.equal(effectAlpha(heldIn,1.9),1);assert(Math.abs(effectAlpha(heldIn,2.5)-.5)<1e-9);const heldOut={type:'black-out',start:4,duration:2,hold:.5,strength:1};assert.equal(effectAlpha(heldOut,4),0);assert.equal(effectAlpha(heldOut,5.8),1);
 const txt={start:0,end:3,fadeIn:.4,fadeOut:.6,motion:'rise',x:.5,y:.8,opacity:1};assert.equal(textPose(txt,0).alpha,0);assert(textPose(txt,0).y>.8);assert.equal(textPose(txt,1).y,.8);assert(Math.abs(textPose(txt,2.7).alpha-.5)<1e-8);

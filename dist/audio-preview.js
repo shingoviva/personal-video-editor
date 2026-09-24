@@ -13,7 +13,7 @@ export class AudioPreview{
   if(!row||!url||!m?.audio||c.audio?.mute||!gain||held(row,t)){v.pause();return}
   const source=sourceTime(row,t),local=t-row.start+(row.offset||0),tm=timing(c),i=tm.nodes.findIndex(n=>n[1]>=local),speed=tm.pieces[Math.max(0,i-1)]?.[2]||1;
   if(v.dataset.url!==url){v.pause();v.dataset.url=url;v.src=url;v.load()}
-  const at=loop?source%m.duration:source;v.loop=loop;v.volume=Math.min(1,gain*gainAt(local,tm.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut));
+  const at=loop?source%m.duration:source;v.loop=loop;v.volume=Math.min(1,gain*gainAt(local,tm.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut,c.audio.gainKeyframes));
   if(v.readyState>=1&&!v.seeking&&Math.abs(v.currentTime-at)>.08)try{v.currentTime=at}catch{}
   if(playing&&speed>=.25&&speed<=4&&!c.freezeDuration){v.playbackRate=speed;if(v.paused)v.play().catch(()=>{})}else v.pause();
  }

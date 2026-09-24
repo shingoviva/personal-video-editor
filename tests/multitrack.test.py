@@ -8,7 +8,7 @@ with tempfile.TemporaryDirectory(prefix='pve-multitrack-') as tmp:
  def clip(m,layer):return {'id':m['id'],'media':m['id'],'in':0,'out':2,'start':0,'layer':layer,'speed':1,'endSpeed':1,'curve':'constant','stabilization':'OFF','audio':{'volume':.4,'mute':False},'color':{}}
  media=[video('red','red',220),video('blue','blue',330),video('green','green',550)]+[sound('tone'+str(k),f) for k,f in enumerate([440,660,880,1100])]
  p={'version':1,'media':media,'clips':[clip(m,i) for i,m in enumerate(media[:3])],'audioClips':[{**clip(m,i),'kind':'audio','out':1.5,'start':i*.1,'loop':True} for i,m in enumerate(media[3:])],'audioTracks':[{} for _ in range(4)],'texts':[],'bgm':{},'aspect':'Original','export':{'resolution':'Source','fps':'30','quality':'High'}}
- p['clips'][1]['opacity']=.5;p['clips'][2]['opacity']=.5
+ p['clips'][1]['opacity']=.5;p['clips'][2]['opacity']=.5;p['clips'][0]['scaleKeyframes']=[{'time':0,'value':1},{'time':1,'value':1.35},{'time':2,'value':1}]
  def render(p,name):
   r=core.render({'id':name,'cancel':False},copy.deepcopy(p));out=core.ROOT/'exports'/r['file'];core.validate_output(out,r['duration'],True);return out,r
  def amplitudes(out):
@@ -19,4 +19,8 @@ with tempfile.TemporaryDirectory(prefix='pve-multitrack-') as tmp:
  p['audioTracks'][2]['solo']=True;p['audioClips'][2]['out']=2.5
  out,r=render(p,'solo-tail');assert abs(r['duration']-2.7)<.04,r
  amps=amplitudes(out);assert amps[5]>.02 and max(amps[:5]+amps[6:])<.004,amps
- print('Native three video source-audio layers, four independent tones/loops, solo, audio tail, H264/AAC full decode PASS')
+ curve=copy.deepcopy(p);curve['clips']=[];curve['audioTracks']=[{} for _ in range(4)];curve['audioClips']=[{**clip(media[3],0),'kind':'audio','in':0,'out':1.5,'start':0,'loop':True,'audio':{'volume':.5,'gainKeyframes':[{'time':0,'value':.08},{'time':.5,'value':1.8},{'time':1.3,'value':.08}]}}];curve['bgm']={'media':media[4]['id'],'volume':.5,'fadeIn':0,'fadeOut':0,'gainKeyframes':[{'time':0,'value':.08},{'time':.5,'value':1.8},{'time':1.3,'value':.08}]};out,r=render(curve,'gain-automation');assert abs(r['duration']-1.5)<.05,r
+ def tone_amp(out,at,freq=440):
+  raw=subprocess.check_output(core.BASE+['-v','error','-ss',str(at),'-i',out,'-t','0.12','-vn','-ac','1','-ar','8000','-f','f32le','pipe:1']);samples=array.array('f');samples.frombytes(raw);return 2*abs(sum(v*complex(math.cos(2*math.pi*freq*i/8000),math.sin(2*math.pi*freq*i/8000)) for i,v in enumerate(samples)))/len(samples)
+ low,high,low2=tone_amp(out,.12),tone_amp(out,.65),tone_amp(out,1.15);assert high>low*3 and high>low2*3,(low,high,low2);bg_low,bg_high,bg_low2=tone_amp(out,.12,660),tone_amp(out,.65,660),tone_amp(out,1.15,660);assert bg_high>bg_low*3 and bg_high>bg_low2*3,(bg_low,bg_high,bg_low2)
+ print('Native three video source-audio layers, four independent tones/loops, solo, audio tails and smooth clip/BGM gain keyframes, H264/AAC full decode PASS')

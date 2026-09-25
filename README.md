@@ -1,8 +1,13 @@
-# PERSONAL VIDEO EDITOR — V2 · 2.1.4
+# PERSONAL VIDEO EDITOR — V2 · 2.1.5
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**v2.1.4 公開版**です。H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+**v2.1.5 公開版**です。H.264/SDR実写素材、`IMG_7917.mov` と `IMG_7697.MP4` のHEVC/SDR/VFR実写素材、合成素材で処理を検証しています。iPhone 16 Pro Safari・実写HDRの受け入れ試験は未実施です。
+
+## 2.1.5 — TIMELINE ROW ALIGNMENT
+
+- FX／テキスト行に残っていた下余白を除去し、F/T1〜F/T3、V1〜V3、A1〜A4のラベルと素材行を同じ縦位置へ揃えました。
+- タイムライン全体の高さを各行の合計値へ統一し、縦スクロール時にもラベル列と素材列がずれないようにしました。
 
 ## 2.1.4 — UI CONSISTENCY & GUIDANCE
 

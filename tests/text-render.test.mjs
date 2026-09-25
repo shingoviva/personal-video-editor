@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {sanitizeTexts,MAX_TEXT_LAYERS} from '../dist/model.js';
 import {textStyle,textRasterPlacement} from '../dist/text-render.js';
 import {captionDefaults,applyCaptionPreset,applyCaptionPresetStable} from '../dist/caption-presets.js';
+import {textPose} from '../dist/creative.js';
 
 const [text]=sanitizeTexts([{id:'title',text:'東京\nNIGHT',font:'Serif',align:'right',weight:'800',color:'#f2c8b0',box:'dark',outline:12,size:500,x:2,y:-1,opacity:2,fadeIn:8,fadeOut:-2,motion:'rise',motionDuration:4,start:1,end:0}]);
 assert.equal(text.text,'東京\nNIGHT');
@@ -29,4 +30,6 @@ assert.equal(decorated.outline,20);assert.equal(decorated.shadowOpacity,1);asser
 assert.equal(sanitizeTexts([{text:'Italic',italic:true}])[0].italic,true);assert.equal(textStyle({text:'Italic',italic:true}).italic,true);
 const raster={width:800,height:220,anchorX:400,anchorY:110,referenceWidth:1920,referenceHeight:1080},placed1080=textRasterPlacement({...subtitle,start:0,end:2},raster,1920,1080),placed4k=textRasterPlacement({...subtitle,start:0,end:2},raster,3840,2160);assert.equal(placed4k.scale,placed1080.scale*2);assert.equal(placed4k.x,placed1080.x*2);assert.equal(placed4k.y,placed1080.y*2);
 const [rich]=sanitizeTexts([{text:'二重フチ',lineColors:['#112233','bad'],accentWords:'重要語',accentColor:'#ff817b',outerOutline:99,outerOutlineColor:'#abcdef'}]);assert.deepEqual(rich.lineColors,['#112233','#ffffff']);assert.equal(rich.accentWords,'重要語');assert.equal(rich.outerOutline,20);assert.equal(rich.outerOutlineColor,'#abcdef');
+const [scaleText]=sanitizeTexts([{text:'ZOOM',start:2,end:8,motion:'scale',motionStart:1,motionEnd:4,motionScaleFrom:.5,motionScaleTo:2}]);assert.equal(textPose(scaleText,2.5).scale,.5);assert.ok(Math.abs(textPose(scaleText,4.5).scale-1.25)<1e-8);assert.equal(textPose(scaleText,7).scale,2);
+const popText={text:'POP',start:0,end:3,motion:'pop',motionDuration:.3};assert.ok(textPose(popText,.05).scale<1);assert.equal(textPose(popText,2.9).scale,1);
 console.log('Text layers: 120 captions, decoration, presets, validation and persisted raster exclusion PASS');

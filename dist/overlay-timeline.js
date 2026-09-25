@@ -2,12 +2,12 @@ import {clamp} from './model.js';
 import {equalSpacingStart} from './timeline-gestures.js';
 
 // Keep overlay items frame-aligned, then magnetize either edge to the playhead
-// or an edit boundary. Eight screen pixels keeps the feel stable at any zoom.
+// or an edit boundary. Twelve screen pixels is forgiving without feeling sticky.
 export function snapOverlayStart(value,span,{duration,pixels,enabled=true,bypass=false,targets=[]}={}){
  const frame=1/30,limit=Math.max(0,(duration||0)-Math.max(0,span||0)),raw=clamp(value,0,limit);
  let start=Math.round(raw/frame)*frame,snapped=false,target=null,best=Infinity;
  if(enabled&&!bypass){
-  const threshold=Math.max(duration||0,.001)/Math.max(pixels||0,1)*8;
+  const threshold=Math.max(duration||0,.001)/Math.max(pixels||0,1)*12;
   for(const point of new Set(targets.filter(Number.isFinite))){
    for(const edge of [0,span]){
     const candidate=point-edge,distance=Math.abs(candidate-raw);

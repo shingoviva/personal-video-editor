@@ -583,7 +583,10 @@ def render(job,project,preview=False,_token=None,_size=None):
     if t.get('motion')=='slide-left':xp+=f'+main_w*({shift})'
     ref_h=max(1,number(raster_info.get('referenceHeight'),1080,1,8192));base_scale=min(h/ref_h,w*.92/rw,h*.9/rh);scale_filter=f"scale=w='iw*{base_scale:.9f}':h=-1:flags=lanczos"
     if t.get('motion')=='pop':
-     phase=f'max(0,min(1,min(t/{md},({d}-t)/{md})))';ease_scale=f'({phase})*({phase})*(3-2*({phase}))';scale_filter=f"scale=w='iw*{base_scale:.9f}*(.82+.18*({ease_scale}))':h=-1:flags=lanczos:eval=frame"
+     phase=f'max(0,min(1,t/{md}))';ease_scale=f'({phase})*({phase})*(3-2*({phase}))';scale_filter=f"scale=w='iw*{base_scale:.9f}*(.82+.18*({ease_scale}))':h=-1:flags=lanczos:eval=frame"
+    elif t.get('motion')=='scale':
+     motion_start=number(t.get('motionStart'),0,0,d);motion_end=max(motion_start+.001,number(t.get('motionEnd'),min(d,md),0,d));scale_from=number(t.get('motionScaleFrom'),1,.1,4);scale_to=number(t.get('motionScaleTo'),1,.1,4)
+     phase=f'max(0,min(1,(t-{motion_start})/{motion_end-motion_start}))';ease_scale=f'({phase})*({phase})*(3-2*({phase}))';factor=f'({scale_from}+({scale_to-scale_from})*({ease_scale}))';scale_filter=f"scale=w='iw*{base_scale:.9f}*{factor}':h=-1:flags=lanczos:eval=frame"
     filters=[scale_filter,'format=rgba',f'colorchannelmixer=aa={op}']
     if fi:filters.append(f'fade=t=in:st=0:d={fi}:alpha=1')
     if fo:filters.append(f'fade=t=out:st={max(0,d-fo)}:d={fo}:alpha=1')

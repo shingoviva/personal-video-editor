@@ -12,6 +12,8 @@ assert.equal(checkpoints,1);assert.equal(finishes,1);assert.equal(p.clips[0].out
 assert.equal(element.onpointermove,null);
 bind();element.onpointerdown(event(0,0,'in'));element.onpointermove(event(50));element.onpointerup(event(50));
 assert.equal(p.clips[0].in,2.5);assert.equal(p.clips[0].start,1.5);assert.equal(p.clips[0].start+timing(p.clips[0]).duration,3.5);
+const snapClip={...clip(m),in:0,out:4,start:0,layer:0},snapRow={clip:snapClip,start:0,end:4,duration:4,layer:0},snapElement={...element,dataset:{clip:snapClip.id},style:{}},snapRoot={getBoundingClientRect:()=>({width:1000}),querySelectorAll:()=>[snapElement]};
+bindTimeline({root:snapRoot,rows:[snapRow],duration:10,select(){},begin(){},finish(){},cancel(){},preview(){},media:()=>m,snap:()=>true,snapTargets:()=>[5.02],getLayer:()=>0});snapElement.onpointerdown(event(0,0,'out'));snapElement.onpointermove(event(100,0,'out'));snapElement.onpointerup(event(100,0,'out'));assert.equal(snapClip.out,5.02);
 bind();element.onpointerdown(event(0));element.onpointermove(event(100,120));element.onpointerup(event(100,120));
 assert.equal(p.clips[0].layer,1);assert.equal(p.clips[0].start,2.5);
 bind();element.onpointerdown(event(0));element.onpointermove(event(20));element.onpointercancel();

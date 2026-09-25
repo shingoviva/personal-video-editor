@@ -37,7 +37,7 @@ with tempfile.TemporaryDirectory(prefix='pve-creative-') as tmp:
  assert pixel(out,.9)[0]>200,pixel(out,.9)
  assert max(pixel(out,1.9))<40,pixel(out,1.9)
  q['effects']=[];q['clips'][0].update(freezeAt=.5,freezeDuration=2,**{'in':.5,'out':.5+1/30})
- q['texts']=[{'text':'静止画面','start':0,'end':2,'fadeIn':.1,'fadeOut':.1,'motion':'rise','motionDuration':.2,'size':80,'x':.5,'y':.5,'raster':{'data':text_png(),'width':320,'height':160}}]
+ q['texts']=[{'text':'静止画面','start':0,'end':2,'fadeIn':.1,'fadeOut':.1,'motion':'scale','motionDuration':.2,'motionStart':.2,'motionEnd':1.2,'motionScaleFrom':.5,'motionScaleTo':1.5,'size':80,'x':.5,'y':.5,'raster':{'data':text_png(),'width':320,'height':160}}]
  text_out=render(q,'freeze-text');assert min(pixel_at(text_out,1))>220,pixel_at(text_out,1)
  moving=core.inspect(root/'dist/device-test.mp4','moving','device-test.mp4')
  q['clips']=[{**clip(moving,0),'in':.999,'out':1,'freezeAt':.999,'freezeDuration':2}];q['texts']=[]

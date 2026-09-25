@@ -39,7 +39,9 @@ def render_tracks(job,project,clips,work,total,track_key='audioTracks',layers=4,
     job['operation']=f'{"V" if track_key=="videoTracks" else "A"}{layer+1} の音声を処理中';core.run(job,args,length,.9,0)
    listing=folder/'pieces.txt';listing.write_text(''.join(f"file '{p.name}'\n" for p in segments));joined=folder/'remapped.wav'
    core.run(job,['-f','concat','-safe','0','-i',listing,'-c','copy',joined],duration,.9,0)
-   fi=core.number(audio.get('fadeIn'),0,0,(duration+hold)/2);fo=core.number(audio.get('fadeOut'),0,0,(duration+hold)/2);volume=gain*core.number(audio.get('volume'),1,0,2)
+   # Sub-frame ramps remove waveform discontinuities at hard cuts. Explicit
+   # longer fades continue to take precedence.
+   edge=min(.008,(duration+hold)/2);fi=max(edge,core.number(audio.get('fadeIn'),0,0,(duration+hold)/2));fo=max(edge,core.number(audio.get('fadeOut'),0,0,(duration+hold)/2));volume=gain*core.number(audio.get('volume'),1,0,2)
    af=f'volume={volume},'
    if audio.get('gainKeyframes'):af+=f"volume='{core.keyframe_expression(audio['gainKeyframes'],duration+hold,2,'t')}':eval=frame,"
    af+=f'apad,atrim=duration={duration+hold}'

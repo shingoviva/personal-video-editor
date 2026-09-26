@@ -1,4 +1,4 @@
-export const WEB_FONTS=['Noto Sans JP','Noto Serif JP','M PLUS Rounded 1c','Zen Kaku Gothic New','Shippori Mincho'];
+export const WEB_FONTS=['Noto Sans JP','Noto Serif JP','M PLUS Rounded 1c','Zen Kaku Gothic New','Shippori Mincho','BIZ UDPGothic','BIZ UDPMincho','Kosugi Maru','Sawarabi Gothic','Kaisei Decol','RocknRoll One'];
 export const SYSTEM_FONT_CANDIDATES=['Arial','Helvetica Neue','Hiragino Sans','Hiragino Kaku Gothic ProN','Hiragino Mincho ProN','Yu Gothic','Yu Mincho','Avenir Next','Futura','Georgia','Times New Roman','Baskerville','Didot','Menlo','Courier New'];
 
 let connection;

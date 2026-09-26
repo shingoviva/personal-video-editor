@@ -19,12 +19,19 @@ export async function audioRange(track,start,end){
  const sink=new AudioSampleSink(track);for await(const sample of sink.samples(Math.max(0,start),end)){try{check();const offset=Math.round((sample.timestamp-start)*rate);for(let ch=0;ch<2;ch++){const data=new Float32Array(sample.numberOfFrames);sample.copyTo(data,{planeIndex:Math.min(ch,sample.numberOfChannels-1),format:'f32-planar'});const a=Math.max(0,-offset),b=Math.min(data.length,length-offset);if(b>a)planes[ch].set(data.subarray(a,b),offset+a)}}finally{sample.close()}}
  return{planes,rate,start};
 }
+const delayStates=new Map();
+export function delayTaps(audio={}){if(!audio.delayEnabled||!(audio.delayMix>0))return[{offset:0,gain:1}];const time=Math.max(.02,Math.min(2,+audio.delayTime||.28)),feedback=Math.max(0,Math.min(.85,+audio.delayFeedback||.35)),mix=Math.max(0,Math.min(.8,+audio.delayMix||.25));return[{offset:0,gain:1-mix*.25},{offset:time,gain:mix},{offset:time*2,gain:mix*feedback}]}
+function mixClipRange(data,lo,count,chunk,row,start,rate,begin,stop,trackVolume){
+ const c=row.clip,audio=c.audio||{},duration=row.originalDuration??row.duration,enabled=!!audio.delayEnabled&&audio.delayMix>0,temp=enabled?new Float32Array(data.length):data;
+ mixWindow(temp,lo,count,chunk.planes,i=>{const s=sourceTime(row,start+(lo+i)/rate),pos=c.loop?s%chunk.duration:s;return pos>=begin&&pos<stop?(pos-begin)*chunk.rate:-1},i=>{const local=start+(lo+i)/rate-row.start+(row.offset||0);return trackVolume*gainAt(local,duration,audio.volume,audio.fadeIn,audio.fadeOut,audio.gainKeyframes)*declickGain(local,duration)});
+ if(!enabled)return;const samples=Math.max(1,Math.round(Math.max(.02,Math.min(2,+audio.delayTime||.28))*rate)),at=start+lo/rate;let state=delayStates.get(c.id);if(!state||Math.abs(state.time-at)>2/rate||state.samples!==samples){state={samples,pos:0,time:at,ring:[new Float32Array(samples),new Float32Array(samples)],low:[0,0]};delayStates.set(c.id,state)}const n=data.length/2,mix=Math.max(0,Math.min(.8,+audio.delayMix||.25)),feedback=Math.max(0,Math.min(.85,+audio.delayFeedback||.35));for(let i=lo;i<lo+count;i++){for(let ch=0;ch<2;ch++){const input=temp[ch*n+i],delayed=state.ring[ch][state.pos];state.low[ch]+=(delayed-state.low[ch])*.32;state.ring[ch][state.pos]=input+state.low[ch]*feedback;data[ch*n+i]+=input*(1-mix*.25)+state.low[ch]*mix}state.pos=(state.pos+1)%samples}state.time=start+(lo+count)/rate;
+}
 export async function mixAudio(rows,resources,p,start,end){
  const rate=48000,n=Math.round((end-start)*rate),data=new Float32Array(n*2);if(!n)return null;
  for(const row of [...rows,...audioWindows(p)]){const c=row.clip;if(c.kind!=='audio'&&(p.audioTracks||[]).some(t=>t.solo))continue;if(c.gap||c.freezeDuration||c.audio.mute||!c.audio.volume)continue;const track=resources.get(c.media).audio;if(!track)continue;const a=Math.max(start,row.start),b=Math.min(end,row.end,row.start+timing(c).nodes.at(-1)[1]-(row.offset||0));if(b<=a)continue;
  const lo=Math.max(0,Math.round((a-start)*rate)),hi=Math.min(n,Math.round((b-start)*rate));const from=sourceTime(row,a),to=sourceTime(row,b),res=resources.get(c.media),trackVolume=c.kind==='audio'?trackGain(p,row.layer):p.videoTracks?.[row.layer||0]?.hidden?0:Math.max(0,Math.min(2,p.videoTracks?.[row.layer||0]?.volume??1));if(!trackVolume)continue;
  const ranges=[];if(!c.loop)ranges.push([from,to+.002]);else{const d=res.duration,span=to-from,f=from%d;if(span>=d)ranges.push([0,d]);else{ranges.push([f,Math.min(d,f+span+.002)]);if(f+span>d)ranges.push([0,f+span-d+.002])}}
- for(const [begin,stop] of ranges){const chunk=await audioRange(track,begin,stop);mixWindow(data,lo,hi-lo,chunk.planes,i=>{const s=sourceTime(row,start+(lo+i)/rate),pos=c.loop?s%res.duration:s;return pos>=begin&&pos<stop?(pos-begin)*chunk.rate:-1},i=>{const local=start+(lo+i)/rate-row.start+(row.offset||0),duration=row.originalDuration??row.duration;return trackVolume*gainAt(local,duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut,c.audio.gainKeyframes)*declickGain(local,duration)});}
+ for(const [begin,stop] of ranges){const chunk=await audioRange(track,begin,stop);mixClipRange(data,lo,hi-lo,{...chunk,duration:res.duration},row,start,rate,begin,stop,trackVolume);}
  }
  const bg=resources.get(p.bgm.media);if(bg?.audio&&p.bgm.volume){let cursor=start;while(cursor<end-1e-8){check();const local=cursor%bg.duration,stop=Math.min(end,cursor+bg.duration-local);if(stop<=cursor)break;const chunk=await audioRange(bg.audio,local,local+stop-cursor+.002),lo=Math.max(0,Math.round((cursor-start)*rate)),hi=Math.min(n,Math.round((stop-start)*rate));mixWindow(data,lo,hi-lo,chunk.planes,i=>i*chunk.rate/rate,i=>gainAt(start+(lo+i)/rate,total(p),p.bgm.volume,p.bgm.fadeIn,p.bgm.fadeOut,p.bgm.gainKeyframes));cursor=stop;}}
  limitStereo(data,limiter,rate);return new AudioSample({data,format:'f32-planar',numberOfChannels:2,sampleRate:rate,timestamp:start});
@@ -57,7 +64,7 @@ async function frameReader(row,res,cfg,start=row.start){
  },async close(){blend.width=blend.height=1;if(stable)stable.width=stable.height=1}};
  }catch(e){still?.close();throw e}
 }
-async function render(p,files,preview,outputPath){limiter={gain:1};
+async function render(p,files,preview,outputPath){limiter={gain:1};delayStates.clear();
  const cfg=outputSettings(p,preview),hidden=layer=>!!p.videoTracks?.[layer]?.hidden,overlayHidden=item=>!!p.overlayTracks?.[item.layer||0]?.hidden,videoProject={...p,clips:p.clips.filter(c=>!hidden(c.layer||0)),audioClips:[]},rows=visibleSequence(videoProject),sourceAudioRows=sequence(videoProject),effects=(p.effects||[]).filter(e=>!overlayHidden(e)),texts=(p.texts||[]).filter(t=>!overlayHidden(t)),resources=new Map(),textBitmaps=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');

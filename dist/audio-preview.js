@@ -1,34 +1,23 @@
 import {audioWindows,trackGain} from './audio-timeline.js';
 import {sourceTime,gainAt,held,declickGain} from './mobile-model.js';
 import {sequence,timing} from './model.js';
-
 const mediaVoice=()=>{const value=document.createElement('audio');value.preload='auto';value.preservesPitch=false;return value};
 export const previewDriftTolerance=playing=>playing?.32:.035;
 const keyFor=(row,url)=>row&&url?`${row.clip.id}|${url}`:'';
+const groupRows=(rows,count)=>{const grouped=Array.from({length:count},()=>[]);for(const row of rows)grouped[row.layer||0]?.push(row);return grouped};
+const currentRow=(rows,t)=>{for(let i=rows.length-1;i>=0;i--){const row=rows[i];if(row.start<=t&&t<row.end)return row}return null};
+const nextRow=(rows,t)=>{for(const row of rows)if(row.start>t&&row.start-t<1.5)return row;return null};
 
-// Two voices per lane let the next clip decode before the playhead reaches it.
+// Two voices per lane predecode clip boundaries. Web Audio adds a filtered
+// feedback delay without replacing the media element playback clock.
 export class AudioPreview{
- constructor(){this.lanes=Array.from({length:7},()=>({voices:[mediaVoice(),mediaVoice()],active:0}));this.voices=this.lanes.flatMap(lane=>lane.voices)}
- prepare(lane,row,p,urlOf){
-  const c=row?.clip,m=p.media.find(item=>item.id===c?.media),url=m&&urlOf(m),key=keyFor(row,url);if(!key)return null;
-  let index=lane.voices.findIndex(voice=>voice.dataset.key===key);if(index<0){index=1-lane.active;const voice=lane.voices[index];voice.pause();voice.dataset.key=key;voice.dataset.url=url;voice.src=url;voice.load();const at=c.loop?sourceTime(row,row.start)%m.duration:sourceTime(row,row.start);const seek=()=>{try{voice.currentTime=at}catch{}};voice.readyState>=1?seek():voice.addEventListener('loadedmetadata',seek,{once:true})}return index;
- }
- syncLane(lane,row,p,t,playing,urlOf,gain,loop=false){
-  const c=row?.clip,m=p.media.find(item=>item.id===c?.media),url=m&&urlOf(m);
-  if(!row||!url||!m?.audio||c.audio?.mute||!gain||held(row,t)){lane.voices.forEach(voice=>voice.pause());return}
-  const index=this.prepare(lane,row,p,urlOf);if(index!==lane.active){lane.voices[lane.active].pause();lane.active=index}
-  const voice=lane.voices[index],source=sourceTime(row,t),local=t-row.start+(row.offset||0),tm=timing(c),i=tm.nodes.findIndex(node=>node[1]>=local),speed=tm.pieces[Math.max(0,i-1)]?.[2]||1,at=loop?source%m.duration:source;
-  voice.loop=loop;voice.volume=Math.min(1,gain*gainAt(local,tm.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut,c.audio.gainKeyframes)*declickGain(local,tm.duration,.04));
-  if(voice.readyState>=1&&!voice.seeking&&Math.abs(voice.currentTime-at)>previewDriftTolerance(playing))try{voice.currentTime=at}catch{}
-  if(playing&&speed>=.25&&speed<=4&&!c.freezeDuration){voice.playbackRate=speed;if(voice.readyState>=2&&voice.paused)voice.play().catch(()=>{})}else voice.pause();
- }
- primeNext(lane,rows,p,t,urlOf){const next=rows.filter(row=>row.start>t&&row.start-t<1.5).sort((a,b)=>a.start-b.start)[0];if(next)this.prepare(lane,next,p,urlOf)}
- sync(p,t,playing,urlOf){
-  const audioRows=audioWindows(p);
-  for(let layer=0;layer<4;layer++){const rows=audioRows.filter(value=>value.layer===layer),row=rows.find(value=>value.start<=t&&t<value.end);this.syncLane(this.lanes[3+layer],row,p,t,playing,urlOf,trackGain(p,layer),!!row?.clip.loop);this.primeNext(this.lanes[3+layer],rows,p,t,urlOf)}
-  const solo=!!p.audioTracks?.some(track=>track.solo),all=sequence(p);
-  for(let layer=0;layer<3;layer++){const rows=all.filter(value=>value.layer===layer&&!value.clip.gap),row=[...rows].reverse().find(value=>value.start<=t&&t<value.end),track=p.videoTracks?.[layer]||{};this.syncLane(this.lanes[layer],row,p,t,playing,urlOf,solo||track.hidden?0:Math.max(0,Math.min(2,track.volume??1)));this.primeNext(this.lanes[layer],rows,p,t,urlOf)}
- }
+ constructor(){this.context=null;this.graphs=new WeakMap();this.videoKey='';this.videoByLayer=null;this.lanes=Array.from({length:7},()=>({voices:[mediaVoice(),mediaVoice()],active:0}));this.voices=this.lanes.flatMap(lane=>lane.voices)}
+ graph(voice){const Context=globalThis.AudioContext||globalThis.webkitAudioContext;if(!Context)return null;try{if(!this.context)this.context=new Context({latencyHint:'interactive'});let graph=this.graphs.get(voice);if(graph)return graph;const source=this.context.createMediaElementSource(voice),dry=this.context.createGain(),delay=this.context.createDelay(2),tone=this.context.createBiquadFilter(),feedback=this.context.createGain(),wet=this.context.createGain();tone.type='lowpass';tone.frequency.value=9000;source.connect(dry).connect(this.context.destination);source.connect(delay).connect(tone).connect(wet).connect(this.context.destination);tone.connect(feedback).connect(delay);graph={dry,delay,feedback,wet};this.graphs.set(voice,graph);return graph}catch{return null}}
+ configure(voice,audio,playing){const enabled=!!audio?.delayEnabled,existing=this.graphs.get(voice);if(!enabled&&!existing)return;const graph=existing||this.graph(voice);if(!graph)return;const mix=enabled?audio.delayMix??.25:0,now=this.context.currentTime;graph.delay.delayTime.setTargetAtTime(audio?.delayTime??.28,now,.01);graph.feedback.gain.setTargetAtTime(enabled?audio?.delayFeedback??.35:0,now,.01);graph.wet.gain.setTargetAtTime(mix,now,.01);graph.dry.gain.setTargetAtTime(1-mix*.25,now,.01);if(playing&&this.context.state==='suspended')this.context.resume().catch(()=>{})}
+ prepare(lane,row,p,urlOf){const c=row?.clip,m=p.media.find(item=>item.id===c?.media),url=m&&urlOf(m),key=keyFor(row,url);if(!key)return null;let index=lane.voices.findIndex(voice=>voice.dataset.key===key);if(index<0){index=1-lane.active;const voice=lane.voices[index];voice.pause();voice.dataset.key=key;voice.dataset.url=url;voice.src=url;voice.load();const at=c.loop?sourceTime(row,row.start)%m.duration:sourceTime(row,row.start);const seek=()=>{try{voice.currentTime=at}catch{}};voice.readyState>=1?seek():voice.addEventListener('loadedmetadata',seek,{once:true})}return index}
+ syncLane(lane,row,p,t,playing,urlOf,gain,loop=false){const c=row?.clip,m=p.media.find(item=>item.id===c?.media),url=m&&urlOf(m);if(!row||!url||!m?.audio||c.audio?.mute||!gain||held(row,t)){lane.voices.forEach(voice=>voice.pause());return}const index=this.prepare(lane,row,p,urlOf);if(index!==lane.active){lane.voices[lane.active].pause();lane.active=index}const voice=lane.voices[index],source=sourceTime(row,t),local=t-row.start+(row.offset||0),tm=timing(c),i=tm.nodes.findIndex(node=>node[1]>=local),speed=tm.pieces[Math.max(0,i-1)]?.[2]||1,at=loop?source%m.duration:source;this.configure(voice,c.audio,playing);voice.loop=loop;voice.volume=Math.min(1,gain*gainAt(local,tm.duration,c.audio.volume,c.audio.fadeIn,c.audio.fadeOut,c.audio.gainKeyframes)*declickGain(local,tm.duration,.04));if(voice.readyState>=1&&!voice.seeking&&Math.abs(voice.currentTime-at)>previewDriftTolerance(playing))try{voice.currentTime=at}catch{}if(playing&&speed>=.25&&speed<=4&&!c.freezeDuration){voice.playbackRate=speed;if(voice.readyState>=2&&voice.paused)voice.play().catch(()=>{})}else voice.pause()}
+ primeNext(lane,rows,p,t,urlOf){const next=nextRow(rows,t);if(next)this.prepare(lane,next,p,urlOf)}
+ sync(p,t,playing,urlOf){const audioByLayer=groupRows(audioWindows(p),4);for(let layer=0;layer<4;layer++){const rows=audioByLayer[layer],row=currentRow(rows,t);this.syncLane(this.lanes[3+layer],row,p,t,playing,urlOf,trackGain(p,layer),!!row?.clip.loop);this.primeNext(this.lanes[3+layer],rows,p,t,urlOf)}const solo=!!p.audioTracks?.some(track=>track.solo),videoKey=p.clips.map(c=>[c.id,c.start,c.layer,c.in,c.out,c.speed,c.endSpeed,c.curve,c.hold].join(':')).join('|');if(videoKey!==this.videoKey){this.videoKey=videoKey;this.videoByLayer=groupRows(sequence(p).filter(value=>!value.clip.gap),3)}for(let layer=0;layer<3;layer++){const rows=this.videoByLayer[layer],row=currentRow(rows,t),track=p.videoTracks?.[layer]||{};this.syncLane(this.lanes[layer],row,p,t,playing,urlOf,solo||track.hidden?0:Math.max(0,Math.min(2,track.volume??1)));this.primeNext(this.lanes[layer],rows,p,t,urlOf)}}
  pause(){this.voices.forEach(voice=>voice.pause())}
- dispose(){this.voices.forEach(voice=>{voice.pause();voice.removeAttribute('src');voice.load();delete voice.dataset.key;delete voice.dataset.url})}
+ dispose(){this.voices.forEach(voice=>{voice.pause();voice.removeAttribute('src');voice.load();delete voice.dataset.key;delete voice.dataset.url});this.context?.close?.();this.context=null;this.graphs=new WeakMap()}
 }

@@ -1,6 +1,8 @@
 """Same RGB transform as preview.js; a cached 33-point LUT for native FFmpeg."""
-import hashlib,json,pathlib
-COLOR_KEYS=('exposure','brilliance','highlights','shadows','contrast','brightness','blackPoint','whites','blacks','gamma','temperature','warmth','tint','saturation','vibrance','fade')
+import hashlib,json,math,pathlib
+BALANCE_ZONES=('Shadow','Midtone','Highlight')
+BALANCE_KEYS=tuple(f'balance{zone}{part}' for zone in BALANCE_ZONES for part in ('Hue','Saturation','Lightness'))
+COLOR_KEYS=('exposure','brilliance','highlights','shadows','contrast','brightness','blackPoint','whites','blacks','gamma','temperature','warmth','tint','saturation','vibrance','fade')+BALANCE_KEYS
 CURVE_KEYS=('curveMaster','curveRed','curveGreen','curveBlue')
 SPATIAL_KEYS=('sharpness','definition','noiseReduction','vignette')
 KEYS=COLOR_KEYS+SPATIAL_KEYS
@@ -43,22 +45,34 @@ def curve_at_prepared(prepared,x):
  return max(0.,min(1.,(2*t3-3*t2+1)*y0+(t3-2*t2+t)*h*m[i]+(-2*t3+3*t2)*y1+(t3-t2)*h*m[i+1]))
 def curve_at(points,x):return curve_at_prepared(prepare_curve(points),x)
 def prepared_curves(col,amount=1):return {k:prepare_curve([[x,x+(y-x)*amount] for x,y in normalize_curve(col.get(k))]) for k in CURVE_KEYS}
+def smoothstep(a,b,x):
+ t=max(0.,min(1.,(x-a)/(b-a)));return t*t*(3-2*t)
+def balance_weights(luma):return (1-smoothstep(.18,.58,luma),smoothstep(.08,.5,luma)*(1-smoothstep(.5,.92,luma)),smoothstep(.42,.82,luma))
+def balance_vector(hue):
+ a=float(hue or 0)*math.pi/180;raw=(math.cos(a),math.cos(a-2*math.pi/3),math.cos(a+2*math.pi/3));neutral=sum(a*b for a,b in zip(raw,(.299,.587,.114)));return tuple(value-neutral for value in raw)
+def apply_three_way(rgb,c):
+ clip=lambda x:max(0.,min(1.,x));v=list(rgb);l=sum(a*b for a,b in zip(v,(.299,.587,.114)))
+ for zone,weight in zip(BALANCE_ZONES,balance_weights(l)):
+  vector=balance_vector(c.get(f'balance{zone}Hue',0));sat=clip(c.get(f'balance{zone}Saturation',0)/100)*.18*weight;light=max(-1.,min(1.,c.get(f'balance{zone}Lightness',0)/100))*.35*weight
+  v=[x+vector[i]*sat for i,x in enumerate(v)];v=[x+(1-x)*light for x in v] if light>=0 else [x*(1+light) for x in v]
+ return [clip(x) for x in v]
 def grade(rgb,col,amount=1,prepared=None):
  c={k:float(col.get(k,0))*amount for k in COLOR_KEYS};clip=lambda x:max(0.,min(1.,x))
+ for zone in BALANCE_ZONES:c[f'balance{zone}Hue']=float(col.get(f'balance{zone}Hue',0))
  c['saturation']=max(-100,c['saturation'])
  curves=prepared or prepared_curves(col,amount)
  warm=c['temperature']+c['warmth']*.8;bias=(warm/400+c['tint']/800,-c['tint']/400,-warm/400+c['tint']/800)
  v=[clip((x*2**c['exposure']-.5)*(1+c['contrast']/150)+.5+c['brightness']/200+c['brilliance']/550*(1-abs(2*x-1))+c['shadows']/400*(1-x)**2+c['highlights']/400*x*x+c['whites']/500*x**4+c['blacks']/500*(1-x)**4-c['blackPoint']/180*(1-x)**3+bias[i]) for i,x in enumerate(rgb)]
- v=[x**(2**(-c['gamma']/100)) for x in v];v=[curve_at_prepared(curves[('curveRed','curveGreen','curveBlue')[i]],curve_at_prepared(curves['curveMaster'],x)) for i,x in enumerate(v)];l=sum(a*b for a,b in zip(v,(.299,.587,.114)));v=[l+(x-l)*(1+c['saturation']/100) for x in v]
+ v=[x**(2**(-c['gamma']/100)) for x in v];v=[curve_at_prepared(curves[('curveRed','curveGreen','curveBlue')[i]],curve_at_prepared(curves['curveMaster'],x)) for i,x in enumerate(v)];v=apply_three_way(v,c);l=sum(a*b for a,b in zip(v,(.299,.587,.114)));v=[l+(x-l)*(1+c['saturation']/100) for x in v]
  f=1+c['vibrance']/100*(1-(max(v)-min(v)));v=[clip(l+(x-l)*f) for x in v];return [clip(x+(.5-x)*max(0,c['fade'])/200) for x in v]
 def filters(col,cache,amount=1):
- values={k:max(-3 if k=='exposure' else 0 if k in SPATIAL_KEYS or k=='fade' else -100,min(3 if k=='exposure' else 100,float(col.get(k,0)))) for k in KEYS}
+ values={k:max(-3 if k=='exposure' else 0 if k in SPATIAL_KEYS or k=='fade' or k.endswith(('Hue','Saturation')) else -100,min(3 if k=='exposure' else 360 if k.endswith('Hue') else 100,float(col.get(k,0)))) for k in KEYS}
  curves={k:normalize_curve(col.get(k)) for k in CURVE_KEYS}
- if (not any(values.values()) and all(curves[k]==[list(v) for v in IDENTITY] for k in CURVE_KEYS)) or amount==0:return []
+ curve_active=any(curves[k]!=[list(v) for v in IDENTITY] for k in CURVE_KEYS);balance_active=any(values[k] for k in BALANCE_KEYS if not k.endswith('Hue'));base_active=any(values[k] for k in COLOR_KEYS if k not in BALANCE_KEYS);has_color=base_active or balance_active or curve_active;has_spatial=any(values[k] for k in SPATIAL_KEYS)
+ if (not has_color and not has_spatial) or amount==0:return []
  key=hashlib.sha256(json.dumps([values,curves,amount],sort_keys=True).encode()).hexdigest()[:24]
  cache=pathlib.Path(cache);path=cache/('look-'+key+'.cube')
  color_values={**{k:values[k] for k in COLOR_KEYS},**curves}
- has_color=any(values[k] for k in COLOR_KEYS) or any(curves[k]!=[list(v) for v in IDENTITY] for k in CURVE_KEYS)
  if has_color and not path.exists():
   prepared=prepared_curves(color_values,amount)
   with path.with_suffix('.tmp').open('w') as f:

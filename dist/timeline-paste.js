@@ -1,6 +1,6 @@
-import {MAX_TEXT_LAYERS,uid} from './model.js';
+import {MAX_TEXT_LAYERS,MAX_EFFECTS,uid} from './model.js';
 
-const LIMITS={video:200,audio:200,effect:20,text:MAX_TEXT_LAYERS};
+const LIMITS={video:200,audio:200,effect:MAX_EFFECTS,text:MAX_TEXT_LAYERS};
 
 export function pasteTimelineItems(project,source,at,id=uid){
  if(!source?.length)return[];

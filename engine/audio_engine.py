@@ -45,6 +45,10 @@ def render_tracks(job,project,clips,work,total,track_key='audioTracks',layers=4,
    af=f'volume={volume},'
    if audio.get('gainKeyframes'):af+=f"volume='{core.keyframe_expression(audio['gainKeyframes'],duration+hold,2,'t')}':eval=frame,"
    af+=f'apad,atrim=duration={duration+hold}'
+   if audio.get('delayEnabled'):
+    delay_ms=round(core.number(audio.get('delayTime'),.28,.02,2)*1000);decay=core.number(audio.get('delayFeedback'),.35,0,.85)*core.number(audio.get('delayMix'),.25,0,.8)
+    if decay:af+=f',aecho=1:1:{delay_ms}:{decay}'
+   af+=f',atrim=duration={duration+hold}'
    if fi:af+=f',afade=t=in:d={fi}'
    if fo:af+=f',afade=t=out:st={duration+hold-fo}:d={fo}'
    af+=f',atrim=start={offset}:duration={d},asetpts=N/SR/TB,apad,atrim=duration={d}'

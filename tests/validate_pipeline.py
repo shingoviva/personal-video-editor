@@ -30,6 +30,7 @@ def render(p):
  j={'id':core.uuid.uuid4().hex,'cancel':False};r=core.render(j,copy.deepcopy(p),True);path=core.ROOT/'cache'/r['file'];probe=json.loads(subprocess.check_output(['ffprobe','-v','error','-show_streams','-show_format','-of','json',path]));v=next(s for s in probe['streams'] if s['codec_type']=='video');a=next(s for s in probe['streams'] if s['codec_type']=='audio');duration=float(probe['format']['duration']);assert abs(duration-r['duration'])<.15,(duration,r);assert v['codec_name']=='h264' and a['codec_name']=='aac';assert v['width']==r['width'] and v['height']==r['height'];assert abs(float(v.get('duration',duration))-float(a.get('duration',duration)))<.15,('av duration',v.get('duration'),a.get('duration'));return {'duration':duration,'expected':r['duration'],'size':[v['width'],v['height']],'audio':a['codec_name']}
 test('prepare_proxy_and_metadata',lambda:core.prepare({'cancel':False},m['id']))
 test('cut_crop_audio',lambda:render(p))
+q=copy.deepcopy(p);q['clips'][0]['audio'].update(delayEnabled=True,delayTime=.18,delayFeedback=.45,delayMix=.35);test('high_quality_audio_delay',lambda:render(q))
 for speed in (.05,20):
  q=copy.deepcopy(p);q['clips'][0].update(speed=speed,out=.5 if speed==.05 else 1.5)
  test('speed_'+str(speed),lambda q=q:render(q))

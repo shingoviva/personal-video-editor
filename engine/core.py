@@ -59,7 +59,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.1','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.2','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -555,7 +555,7 @@ def render(job,project,preview=False,_token=None,_size=None):
   concat=work/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in outputs));joined=work/('joined'+ext)
   job['operation']='クリップを結合中';run(job,['-f','concat','-safe','0','-i',concat,'-c','copy',joined],total,.85,.04)
   overlay_tracks=project.get('overlayTracks',[]);overlay_visible=lambda item:not (len(overlay_tracks)>int(number(item.get('layer'),0,0,2)) and overlay_tracks[int(number(item.get('layer'),0,0,2))].get('hidden'));effects=[e for e in project.get('effects',[]) if overlay_visible(e)]
-  if len(effects)>20:raise ValueError('画面効果は最大20個です。')
+  if len(effects)>100:raise ValueError('画面効果は最大100個です。')
   for i,e in enumerate(effects):
    kind=e.get('type')
    if kind not in ('flash','black-in','black-out'):continue
@@ -567,7 +567,7 @@ def render(job,project,preview=False,_token=None,_size=None):
    run(job,['-i',joined,'-f','lavfi','-t',d,'-i',f'color=c={color}:s={w}x{h}:r={fps}','-filter_complex',graph,'-map','[v]','-map','0:a','-t',total,*video_args,'-c:a','copy',fx],total,.89,0)
    joined=fx
   bgm=project.get('bgm',{});texts=[t for t in project.get('texts',[]) if overlay_visible(t)];final_vf=[];raster_layers=[]
-  if len(texts)>120:raise ValueError('テロップは最大120個です。')
+  if len(texts)>300:raise ValueError('テロップは最大300個です。')
   for i,t in enumerate(texts):
    text=str(t.get('text',''))[:2000]
    if not text:continue

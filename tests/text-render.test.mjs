@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {sanitizeTexts,MAX_TEXT_LAYERS} from '../dist/model.js';
 import {textStyle,textRasterPlacement} from '../dist/text-render.js';
-import {captionDefaults,applyCaptionPreset,applyCaptionPresetStable} from '../dist/caption-presets.js';
+import {captionPresets,captionDefaults,applyCaptionPreset,applyCaptionPresetStable} from '../dist/caption-presets.js';
 import {textPose} from '../dist/creative.js';
 
 const [text]=sanitizeTexts([{id:'title',text:'東京\nNIGHT',font:'Serif',align:'right',weight:'800',color:'#f2c8b0',box:'dark',outline:12,size:500,x:2,y:-1,opacity:2,fadeIn:8,fadeOut:-2,motion:'rise',motionDuration:4,start:1,end:0}]);
@@ -23,6 +23,7 @@ const subtitle=captionDefaults(1,4,'subtitle');assert.equal(subtitle.outline,0);
 const custom={};applyCaptionPreset(custom,'lowerThird');assert.equal(custom.align,'left');assert.equal(custom.motion,'none');
 const stable={font:'Serif',italic:true,size:71,x:.31,y:.68,align:'right',letterSpacing:2,lineHeight:1.4,motion:'pop'};applyCaptionPresetStable(stable,'tvImpact');assert.deepEqual({font:stable.font,italic:stable.italic,size:stable.size,x:stable.x,y:stable.y,align:stable.align,letterSpacing:stable.letterSpacing,lineHeight:stable.lineHeight,motion:stable.motion},{font:'Serif',italic:true,size:71,x:.31,y:.68,align:'right',letterSpacing:2,lineHeight:1.4,motion:'none'});
 assert.equal(captionDefaults(0,2,'varietyYellow').outline,7);assert.equal(captionDefaults(0,2,'popPink').color,'#ff6fae');assert.equal(captionDefaults(0,2,'cornerTag').align,'left');
+assert.equal(Object.keys(captionPresets).length,13);assert.equal(new Set(Object.values(captionPresets).map(p=>p.label)).size,13);assert.ok(Object.values(captionPresets).every(p=>p.sample&&p.description));assert.equal(captionPresets.headline.label,'ディープシャドウ');assert.equal(captionPresets.cornerTag.label,'ライム背景タグ');
 const tv=captionDefaults(0,2,'tvBlueRed');assert.equal(tv.outerOutline,8);assert.deepEqual(tv.lineColors,['#ffffff','#b71318']);
 const impact=captionDefaults(0,2,'tvImpact');impact.accentWords='欠かせない、モノ';const impactStyle=textStyle(impact);assert.equal(impactStyle.outerOutlineColor,'#ffffff');assert.deepEqual(impactStyle.accentWords,['欠かせない','モノ']);
 const [decorated]=sanitizeTexts([{text:'装飾',outline:99,outlineColor:'#123456',shadow:true,shadowOpacity:2,shadowBlur:99,shadowX:-99,shadowY:99,box:'custom',boxColor:'#abcdef',boxOpacity:.4,boxPadding:.5,boxRadius:.2,motion:'pop'}]);

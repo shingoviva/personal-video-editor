@@ -1,5 +1,13 @@
 ## Validation — 2026-09-27
 
+### 2.2.3 — 手ぶれ補正プレビュー／テロッププリセット
+
+- ブラウザ版の通常プレビューへ、端末書き出しと同じ72px解析、毎秒18サンプル、複数領域の平行移動・回転推定、軌跡平滑化、適応拡大を適用した。WebGL側は書き出しCanvasの変換を逆変換した座標で描画する。
+- `IMG_7917.mov`をChromeへ読み込み、NATURALの解析完了と「手ぶれ補正プレビュー適用中」の表示、補正済みフレームの描画、JavaScript例外0件を確認した。実写の補正品質比較とiPhone Safariは未確認。
+- 13種類すべてのテロッププリセットを共通Canvas描画で一覧化して目視確認した。位置・サイズ・フォントを維持する現在の操作仕様に合わせ、名称を装飾の見た目へ統一し、各ボタンへ見本文字と具体的な装飾説明を追加した。
+- JavaScript全試験、静的ビルド検査、Pythonのcapabilities/images/layers/clip-boundary/multitrack/prores/reliability/validate_pipeline/validate_formats/creative/youtube/program-workflow/overlay-only、Macエンジンのサーバー試験を通過した。
+- Mac FFmpegの`vid.stab`は別解析器のため、通常のブラウザプレビューとは一致を保証しない。Mac書き出しとの確認には同じFFmpeg経路を使う「処理プレビューを生成」を使用する。
+
 ### 2.2.2 — 3-wayカラーバランス
 
 - Capture One公式資料を基に、シャドウ・中間調・ハイライトへ色相、彩度、明度を独立設定する操作を追加した。輝度マスクは領域間を滑らかに重ね、ハイライト側も緩やかにロールオフする。

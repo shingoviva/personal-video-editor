@@ -20,6 +20,7 @@ import {motionTransform} from './motion-transform.js';
 import {StabilizationPreview} from './stabilization-preview.js';
 import {bindToneCurve,CURVE_IDENTITY} from './tone-curve.js';
 import {timeAtTimelinePoint,canSplitTimelineRow,contextMenuPosition} from './timeline-context.js';
+import {bindTimelineLaneScroll} from './timeline-scroll.js';
 import {mediaKind,assetName,fileKind,usage,filterAssets,removeUnused,sourceLimit} from './assets.js';
 import {bindAssetVideoPreviews,stopAssetVideoPreviews} from './asset-preview.js';
 import {probeImage,StillPreview} from './image-media.js';
@@ -577,7 +578,8 @@ function renderAudioTimeline(dur,width){
 function splitAudio(){const c=P.audioClips.find(c=>c.id===selectedAudio);if(c?.linked){const v=linkedVideo(P,c);if(v){selected=v.id;selectedAudio=null;return split()}}const r=audioSequence(P).find(r=>r.clip===c);if(!r||time<=r.start+.001||time>=r.end-.001)return toast('音声クリップの途中に再生ヘッドを置いてください。');const at=time;mutate(()=>{const right=splitClip(c,c.in+sourceOffset(time-r.start,c));if(right){P.audioClips.splice(P.audioClips.indexOf(c)+1,0,right);selectedAudio=right.id}});toast(`${format(at)} で音声を分割しました。`)}
 function trimAudio(edge){const c=P.audioClips.find(c=>c.id===selectedAudio),r=audioSequence(P).find(r=>r.clip===c);if(!r||time<=r.start||time>=r.end)return;const source=c.in+sourceOffset(time-r.start,c);mutate(()=>{c[edge]=source;if(edge==='in')c.start=time})}
 
-$('#timelineScroll').addEventListener('scroll',()=>{hideTimelineContext();$('.track-labels-inner').style.transform='translateY(-'+$('#timelineScroll').scrollTop+'px)'},{passive:true});
+bindTimelineLaneScroll({scroll:$('#timelineScroll'),labels:$('.track-labels-inner'),header:$('#ruler'),lanes:()=>$$('#timelineContent>.fx-track,#timelineContent>.video-track,#audioTracks>.audio-track,#markerTrack')});
+$('#timelineScroll').addEventListener('scroll',hideTimelineContext,{passive:true});
 $('#inspectorExpand').onclick=()=>{document.body.classList.remove('media-expanded');const on=document.body.classList.toggle('inspector-expanded');$('#inspectorExpand').setAttribute('aria-pressed',String(on));$('#inspectorExpand').ariaLabel=on?'編集画面へ戻す':'設定パネルを広げる';fitKey='';requestAnimationFrame(()=>{fit();draw()})};
 function fitViewport(){document.documentElement.style.setProperty('--app-height',(window.visualViewport?.height||window.innerHeight)+'px')}
 window.visualViewport?.addEventListener('resize',fitViewport);window.addEventListener('resize',fitViewport);fitViewport();

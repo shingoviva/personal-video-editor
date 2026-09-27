@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 const values=new Map();
 globalThis.localStorage={getItem:key=>values.get(key)||null,setItem:(key,value)=>values.set(key,value)};
@@ -27,4 +28,9 @@ assert.equal(translate('Plain standard text'),'装飾なしの標準テキスト
 assert.equal(translate('Workspace guide'),'画面の見方');
 assert.equal(translate(helpEnglish),helpText);
 assert.equal(translate('Noto Sans JP · Web'),'Noto Sans JP · Web');
+const html=fs.readFileSync(new URL('../dist/index.html',import.meta.url),'utf8'),staticJapanese=[];
+for(const match of html.matchAll(/(?:title|aria-label|placeholder|value)="([^"]*[ぁ-んァ-ヶ一-龠][^"]*)"/g))staticJapanese.push(match[1]);
+for(const match of html.matchAll(/>([^<>]*[ぁ-んァ-ヶ一-龠][^<>]*)</g))staticJapanese.push(match[1].trim());
+const untranslated=[...new Set(staticJapanese)].filter(value=>translate(value,'en')===value);
+assert.deepEqual(untranslated,[],`Untranslated static UI: ${untranslated.join(', ')}`);
 console.log('JA/EN translation, dynamic phrases and language persistence: PASS');

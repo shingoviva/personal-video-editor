@@ -3,13 +3,12 @@ export function nearestLaneScroll(value,stops){
  return ordered.reduce((best,next)=>Math.abs(next-value)<Math.abs(best-value)?next:best,ordered[0]??0);
 }
 
+export function timelineLabelTransform(scrollTop){return`translate3d(0,-${Math.max(0,Number(scrollTop)||0)}px,0)`}
+
 export function bindTimelineLaneScroll({scroll,labels,header,lanes,delay=100}){
- let timer=0;
- const stops=()=>{const box=scroll.getBoundingClientRect(),top=header.offsetHeight;return[0,...lanes().map(lane=>lane.getBoundingClientRect().top-box.top+scroll.scrollTop-top)];};
- const sync=()=>{
-  labels.style.transform=`translateY(-${scroll.scrollTop}px)`;
-  clearTimeout(timer);timer=setTimeout(()=>{const target=nearestLaneScroll(scroll.scrollTop,stops());if(Math.abs(target-scroll.scrollTop)>.5)scroll.scrollTop=target},delay);
- };
+ let frame=0;
+ const paint=()=>{frame=0;labels.style.transform=timelineLabelTransform(scroll.scrollTop)};
+ const sync=()=>{if(!frame)frame=requestAnimationFrame(paint)};
  scroll.addEventListener('scroll',sync,{passive:true});sync();
- return()=>{clearTimeout(timer);scroll.removeEventListener('scroll',sync)};
+ return()=>{if(frame)cancelAnimationFrame(frame);scroll.removeEventListener('scroll',sync)};
 }

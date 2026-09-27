@@ -29,10 +29,10 @@ def opacity_expression(clip,duration,offset=0):
   u=f'max(0,min(1,(({x})-{a})/{max(1e-6,b-a)}))';smooth=f'({u})*({u})*(3-2*({u}))';value=f'({av}+({bv-av})*({smooth}))';expr=f'if(lt({x},{b}),{value},{expr})'
  return f'if(lt({x},{points[0][0]}),{points[0][1]},{expr})'
 
-def keyframe_expression(points,duration,maximum=3,time_expr='t'):
+def keyframe_expression(points,duration,maximum=3,time_expr='t',minimum=0):
  values=[]
  for point in points[:32]:
-  if isinstance(point,dict):values.append((number(point.get('time'),0,0,duration),number(point.get('value'),1,0,maximum)))
+  if isinstance(point,dict):values.append((number(point.get('time'),0,0,duration),number(point.get('value'),1,minimum,maximum)))
  values=sorted(dict(values).items())
  if not values:return '1'
  expr=str(values[-1][1])
@@ -47,7 +47,18 @@ def scale_keyframe_expression(clip,duration,nodes):
  local=str(nodes[-1][1])
  for (x0,y0),(x1,y1) in reversed(list(zip(nodes,nodes[1:]))):
   slope=(y1-y0)/(x1-x0);local=f'if(lt(t,{x1:.9f}),{y0:.9f}+(t-{x0:.9f})*{slope:.9f},{local})'
- return keyframe_expression(points,duration,3,local)
+ return keyframe_expression(points,duration,3,local,.1)
+
+def spatial_filters(width,height,scale_expr,x_expr,y_expr):
+ """Scale from the historical cover=1 baseline, then crop or pad to a fixed black canvas."""
+ base_w=f'max({width},{height}*iw/ih)';base_h=f'max({height},{width}*ih/iw)'
+ scaled_w=f'max(2,trunc(({base_w})*({scale_expr})/2)*2)';scaled_h=f'max(2,trunc(({base_h})*({scale_expr})/2)*2)'
+ return [
+  f"scale=w='{scaled_w}':h='{scaled_h}':eval=frame:flags=lanczos",
+  f"crop=w='min(iw,{width})':h='min(ih,{height})':x='max(0,(iw-ow)*({x_expr}))':y='max(0,(ih-oh)*({y_expr}))'",
+  f"pad=w={width}:h={height}:x='max(0,(ow-iw)*({x_expr}))':y='max(0,(oh-ih)*({y_expr}))':color=black",
+  'setsar=1'
+ ]
 
 def ratio(s):
  try:
@@ -59,7 +70,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.4','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.5','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -224,10 +235,15 @@ def tone(m,small=None):
  vf=[]
  if m['hdr']:
   dv=m.get('dolby') or {}
-  if dv.get('dv_profile')==5:raise ValueError('Dolby Vision Profile 5 はV1のSDR変換対象外です。AppleでSDRへ変換した素材を再読み込みしてください。')
-  if m.get('transfer') not in ('smpte2084','arib-std-b67'):raise ValueError('HDR伝達関数が不明です。誤った色で変換しないため処理を停止しました。')
+  transfer={'pq':'smpte2084','hlg':'arib-std-b67'}.get(m.get('transfer'),m.get('transfer'))
+  if transfer not in ('smpte2084','arib-std-b67'):
+   # Dolby Vision 8.4 identifies its HLG-compatible base layer with id 4.
+   # Profile 5 has no SDR base layer, so use its PQ transfer for a bounded
+   # fallback instead of rejecting the whole export.
+   transfer='arib-std-b67' if dv.get('dv_bl_signal_compatibility_id')==4 else 'smpte2084'
   resize=f'w={small}:h=-2:' if small else ''
-  vf=[f'zscale={resize}t=linear:npl=100','format=gbrpf32le','zscale=p=bt709','tonemap=hable:desat=0','zscale=t=bt709:m=bt709:r=tv','format=yuv420p']
+  tags='' if m.get('transfer') in ('smpte2084','arib-std-b67') else f'tin={transfer}:pin=bt2020:min=bt2020nc:'
+  vf=[f'zscale={resize}{tags}t=linear:npl=100','format=gbrpf32le','zscale=p=bt709','tonemap=hable:desat=0','zscale=t=bt709:m=bt709:r=tv','format=yuv420p']
  elif small:vf=[f"scale='min({small},iw)':-2"]
  return vf
 
@@ -483,18 +499,17 @@ def render(job,project,preview=False,_token=None,_size=None):
     if m.get('kind')!='image':seek=freeze_seek(job,m,number(c.get('freezeAt'),c['in'],0,m['duration']));source_duration=max(.2,source_duration)
     vf+=['select=eq(n\\,0)']
    if m.get('kind')=='image':vf+=['format=rgba','premultiply=inplace=1','format=rgb24']
-   scale=number(c.get('scale'),1,1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1);ar=w/h
+   scale=number(c.get('scale'),1,.1,3);x=number(c.get('x'),.5,0,1);y=number(c.get('y'),.5,0,1)
    preset=c.get('motionPreset','none');amount=number(c.get('motionAmount'),.12,0,.5);progress=f'min(max(t/{max(source_duration,.001):.9f},0),1)';ease=f'({progress})*({progress})*(3-2*({progress}))';scale_expr=scale_keyframe_expression(c,duration,nodes) or str(scale);x_expr=str(x);y_expr=str(y)
    if preset=='pan-left':x_expr=f'max(0,min(1,{x}+{amount}*(.5-({ease}))))'
    elif preset=='pan-right':x_expr=f'max(0,min(1,{x}+{amount}*(({ease})-.5)))'
    elif preset=='pan-up':y_expr=f'max(0,min(1,{y}+{amount}*(.5-({ease}))))'
    elif preset=='pan-down':y_expr=f'max(0,min(1,{y}+{amount}*(({ease})-.5)))'
-   if preset in ('push-in','pull-out') and not c.get('scaleKeyframes'):
-    frame_progress=f'min(max(on/{max(1,duration*fps-1):.9f},0),1)';frame_ease=f'({frame_progress})*({frame_progress})*(3-2*({frame_progress}))'
-    zoom=f'min(3,{scale}*(1+{amount}*({frame_ease})))' if preset=='push-in' else f'min(3,{scale}*(1+{amount}*(1-({frame_ease}))))'
-    vf.extend([f"zoompan=z='{zoom}':x='(iw-iw/zoom)*{x}':y='(ih-ih/zoom)*{y}':d=1:s={w}x{h}:fps={fps}",'setsar=1'])
-   else:vf.extend([f"crop=w='trunc(min(iw,ih*{ar})/({scale_expr})/2)*2':h='trunc(min(ih,iw/{ar})/({scale_expr})/2)*2':x='(iw-ow)*({x_expr})':y='(ih-oh)*({y_expr})'",f'scale={w}:{h}:flags=lanczos','setsar=1'])
-   grade=color_filters(c.get('color',{}),number(c.get('lookAmount'),1,0,1.5));vf+=(['format=gbrpf32le']+grade if grade else []);vf+=['settb=AVTB','setpts=PTS-STARTPTS']
+   grade=color_filters(c.get('color',{}),number(c.get('lookAmount'),1,0,1.5));vf+=(['format=gbrpf32le']+grade if grade else [])
+   if preset=='push-in' and not c.get('scaleKeyframes'):scale_expr=f'min(3,{scale}*(1+{amount}*({ease})))'
+   elif preset=='pull-out' and not c.get('scaleKeyframes'):scale_expr=f'min(3,{scale}*(1+{amount}*(1-({ease}))))'
+   vf.extend(spatial_filters(w,h,scale_expr,x_expr,y_expr))
+   vf+=['settb=AVTB','setpts=PTS-STARTPTS']
    # Use the same 32-piece integral as the browser timeline. Source PTS handles VFR.
    expr=f'{duration:.9f}'
    for (x0,y0),(x1,y1) in reversed(list(zip(nodes,nodes[1:]))):expr=f'if(lt(T,{x1:.9f}),{y0:.9f}+(T-{x0:.9f})*{(y1-y0)/(x1-x0):.9f},{expr})'

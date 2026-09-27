@@ -4,7 +4,9 @@ assert.deepEqual(centeredTransform({x:.45,y:.55},-5,5,100,100),{x:.5,y:.5,snapX:
 assert.deepEqual(centeredTransform({x:.5,y:.5},20,-10,100,100,8,1),{x:.7,y:.4,snapX:false,snapY:false});
 assert.equal(scaleFromWheel(1,-100)>1,true);
 assert.equal(scaleFromWheel(3,-100),3);
-assert.equal(scaleFromWheel(1,100),1);
+assert.equal(scaleFromWheel(.1,100),.1);
+assert.equal(scaleFromWheel(1,100)<1,true);
 assert.ok(scaleFromDrag(1,40,-20)>1);
 assert.equal(scaleFromDrag(3,40,-20),3);
-console.log('Stage transform: position, center snapping and scale limits PASS');
+assert.equal(scaleFromDrag(.1,-40,20),.1);
+console.log('Stage transform: position, center snapping and 0.1–3× scale limits PASS');

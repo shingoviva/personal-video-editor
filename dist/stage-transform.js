@@ -5,8 +5,8 @@ export function centeredTransform(origin,dx,dy,width,height,threshold=8,directio
  if(Math.abs(x-.5)*width<=threshold){x=.5;snapX=true}if(Math.abs(y-.5)*height<=threshold){y=.5;snapY=true}
  return{x,y,snapX,snapY};
 }
-export function scaleFromWheel(scale,delta){return clamp((scale??1)*Math.exp(-delta*.002),1,3)}
-export function scaleFromDrag(scale,dx,dy){return clamp((scale??1)*Math.exp((dx-dy)*.006),1,3)}
+export function scaleFromWheel(scale,delta){return clamp((scale??1)*Math.exp(-delta*.002),.1,3)}
+export function scaleFromDrag(scale,dx,dy){return clamp((scale??1)*Math.exp((dx-dy)*.006),.1,3)}
 
 export function bindStageTransform({root,getClip,enabled,begin,change,finish,guides,status=()=>{},direction=()=>-1,allowScale=()=>true,select=()=>{},scaleHandle=null}){
  let drag=null,wheelTimer=null;

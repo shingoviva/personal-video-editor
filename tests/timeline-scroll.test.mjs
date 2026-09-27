@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import {nearestLaneScroll} from '../dist/timeline-scroll.js';
 
-const stops=[0,32,64,96,148,200,252,296,340,384];
+const stops=[0,52,104,156,208,260,312,356,400,444];
 assert.equal(nearestLaneScroll(0,stops),0);
-assert.equal(nearestLaneScroll(15,stops),0);
-assert.equal(nearestLaneScroll(17,stops),32);
-assert.equal(nearestLaneScroll(81,stops),96);
-assert.equal(nearestLaneScroll(999,stops),384);
-assert.equal(nearestLaneScroll(20,[32,0,32,NaN]),32);
+assert.equal(nearestLaneScroll(25,stops),0);
+assert.equal(nearestLaneScroll(27,stops),52);
+assert.equal(nearestLaneScroll(80,stops),104);
+assert.equal(nearestLaneScroll(999,stops),444);
+assert.equal(nearestLaneScroll(30,[52,0,52,NaN]),52);
 console.log('Timeline vertical scroll: nearest complete lane boundary PASS');

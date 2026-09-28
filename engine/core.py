@@ -70,7 +70,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.5','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.6','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -405,7 +405,7 @@ def visible_clips(clips,fps=None):
   for c in windows:
    offset,d=c['_window'];a=math.ceil(c['_at']*fps-1e-8)/fps;b=math.ceil((c['_at']+d)*fps-1e-8)/fps
    if b-a<1e-8:continue
-   c['_window']=[offset+a-c['_at'],b-a];c['_at']=a
+   c['_window']=[max(0,offset+a-c['_at']),b-a];c['_at']=a
    quantized.append(c)
   windows=quantized
  return windows
@@ -452,6 +452,47 @@ def stabilization_filters(mode,trf='motion.trf'):
  detect=f'vidstabdetect=shakiness={shakiness}:accuracy=15:stepsize=2:mincontrast=0.15:show=0:result={trf}'
  transform=f'vidstabtransform=input={trf}:smoothing={smoothing}:optalgo=gauss:optzoom=2:zoomspeed={zoomspeed}:crop=black:interpol=bicubic'
  return detect,transform
+
+def clip_transition(c,clips=None,fps=30):
+ """Normalize a Canva-style transition attached to the incoming clip."""
+ value=c.get('transition') if isinstance(c.get('transition'),dict) else {}
+ kind=value.get('type','none')
+ if kind not in ('dissolve','slide','wipe','circle'):return None
+ if clips is not None:
+  layer=int(number(c.get('layer'),0,0,2));ends=[0.,0.,0.];rows=[]
+  for item in clips:
+   item_layer=int(number(item.get('layer'),0,0,2));duration=timing(item)[0][-1][1]+(0 if item.get('gap') else number(item.get('hold'),0,0,10));start=number(item.get('start'),ends[item_layer],0,86400);rows.append((item,start,start+duration,item_layer));ends[item_layer]=max(ends[item_layer],start+duration)
+  current=next((row for row in rows if row[0].get('id')==c.get('id')),None)
+  previous=max((row for row in rows if current and row[0] is not current[0] and row[3]==layer and not row[0].get('gap') and row[2]<=current[1]+1e-7),key=lambda row:row[2],default=None)
+  if not current or not previous or abs(previous[2]-current[1])>1/max(1,fps):return None
+ direction=value.get('direction','left')
+ if direction not in ('left','right','up','down'):direction='left'
+ return {'type':kind,'direction':direction,'duration':number(value.get('duration'),.6,.1,2)}
+
+def transition_video_graph(value,duration,window_duration,w,h,fps,pixel):
+ """Build the same smoothstep transition used by browser preview/export."""
+ phase=f'min(max(T/{duration:.9f},0),1)';ease=f'({phase})*({phase})*(3-2*({phase}))'
+ prepare=(f"[0:v]reverse,trim=duration={max(.1,2/fps):.9f},reverse,trim=duration={1/fps:.9f},"
+          f"setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={duration:.9f},format={pixel},settb=AVTB[old];"
+          f"[1:v]format={pixel},settb=AVTB,setpts=PTS-STARTPTS[new];")
+ kind=value['type'];direction=value['direction']
+ if kind=='slide':
+  p=f'min(max(t/{duration:.9f},0),1)';e=f'({p})*({p})*(3-2*({p}))'
+  if direction=='left':old_x,new_x=f'-main_w*({e})',f'main_w*(1-({e}))';old_y=new_y='0'
+  elif direction=='right':old_x,new_x=f'main_w*({e})',f'-main_w*(1-({e}))';old_y=new_y='0'
+  elif direction=='up':old_y,new_y=f'-main_h*({e})',f'main_h*(1-({e}))';old_x=new_x='0'
+  else:old_y,new_y=f'main_h*({e})',f'-main_h*(1-({e}))';old_x=new_x='0'
+  return prepare+(f"color=c=black:s={w}x{h}:r={fps}:d={window_duration:.9f}[base];"
+                  f"[base][old]overlay=x='{old_x}':y='{old_y}':eval=frame[tmp];"
+                  f"[tmp][new]overlay=x='{new_x}':y='{new_y}':eval=frame,"
+                  f"trim=duration={window_duration:.9f},setpts=PTS-STARTPTS[v]")
+ if kind=='dissolve':expr=f'A*(1-({ease}))+B*({ease})'
+ elif kind=='circle':expr=f'if(lte(hypot(X-W/2,Y-H/2),hypot(W,H)/2*({ease})),B,A)'
+ elif direction=='left':expr=f'if(lt(X,W*({ease})),B,A)'
+ elif direction=='right':expr=f'if(gte(X,W*(1-({ease}))),B,A)'
+ elif direction=='up':expr=f'if(lt(Y,H*({ease})),B,A)'
+ else:expr=f'if(gte(Y,H*(1-({ease}))),B,A)'
+ return prepare+f"[old][new]blend=all_expr='{expr}',trim=duration={window_duration:.9f},setpts=PTS-STARTPTS[v]"
 
 def render(job,project,preview=False,_token=None,_size=None):
  audio_clips=validate_audio(project)
@@ -565,6 +606,15 @@ def render(job,project,preview=False,_token=None,_size=None):
    script=work/'graph.txt';script.write_text(';\n'.join(graph))
    job['operation']=f'クリップ {idx+1}/{len(clips)} を書き出し中'
    run(job,input_args+['-filter_complex_script',script,'-map','[v]','-map','[a]',*video_args,*audio_args,'-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',part],window_duration,done/max(total,.001)*.85,window_duration/max(total,.001)*.85)
+   transition=clip_transition(c,raw_clips,fps)
+   if transition and len(outputs)>1 and offset<1/fps+1e-7:
+    td=min(transition['duration'],window_duration);previous=outputs[-2];blended=work/f'clip-{idx:04d}-transition{ext}'
+    # The timeline keeps its duration: hold the completed composite's final
+    # frame under the incoming clip, then reveal/push it for the chosen span.
+    graph=transition_video_graph(transition,td,window_duration,w,h,fps,pixel)
+    job['operation']=f"トランジション {idx+1}/{len(clips)} を合成中"
+    run(job,['-sseof',-.2,'-i',previous,'-i',part,'-filter_complex',graph,'-map','[v]','-map','1:a?',*video_args,'-c:a','copy','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',blended],window_duration,done/max(total,.001)*.85,0)
+    part.unlink();blended.replace(part)
    done+=window_duration
    if (work/'stabilized.mov').exists():(work/'stabilized.mov').unlink()
   concat=work/'concat.txt';concat.write_text(''.join(f"file '{p.name}'\n" for p in outputs));joined=work/('joined'+ext)

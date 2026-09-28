@@ -60,6 +60,8 @@ const translations=[
  ['先頭 / 末尾','Start / end'],['前 / 次の編集点','Previous / next edit'],['前 / 後を再生ヘッドまで前詰め','Ripple previous / next to playhead'],['タイムライン拡大 / 縮小','Zoom timeline in / out'],['吸着 ON / OFF','Snap on / off'],['選択項目を1フレーム移動','Move selection by one frame'],
  ['互換性の高いH.264/AAC MP4。高速再生開始用に最適化します。','Compatible H.264/AAC MP4 optimized for fast playback start.'],['映像','Video'],['端末版：書き出し中はSafariを開いたままにしてください。4K・60fpsは端末の空き容量と処理性能を多く使います。','Device export: keep Safari open while exporting. 4K and 60fps use substantial storage and processing power.'],['この設定で書き出す ↗','Export with these settings ↗'],['ProRes標準値','Standard ProRes rate'],['10bit 4:2:2と非圧縮PCM音声。Macでの仕上げ・再編集向けです。','10-bit 4:2:2 with uncompressed PCM audio, intended for finishing and re-editing on Mac.'],
  ['0.1×から縮小できます。画面外の余白は黒で書き出します。','Scale down to 0.1×. Areas outside the picture export as black.'],['HDR素材はSDR（BT.709）へ変換して書き出します。','HDR media is converted to SDR (BT.709) for export.'],
+ ['このウインドウを閉じますか？','Close this window?'],['完成したMP4の保存先を確認してから閉じてください。','Confirm where the completed MP4 was saved before closing.'],['編集内容は保持されます。','Your edit will be preserved.'],['書き出し結果へ戻る','Return to export result'],
+ ['種類','Type'],['なし（カット）','None (cut)'],['ディゾルブ','Dissolve'],['スライド','Slide'],['ラインワイプ','Line wipe'],['サークルワイプ','Circle wipe'],['長さ','Duration'],['方向','Direction'],['左へ','Left'],['右へ','Right'],['上へ','Up'],['下へ','Down'],['同じレイヤーで直前に接するクリップとの切り替えに適用します。時間と方向は直接指定できます。','Applies between adjacent clips on the same layer. Duration and direction can be entered directly.'],
 ];
 
 const byJapanese=new Map(translations);

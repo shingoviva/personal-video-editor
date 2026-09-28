@@ -9,6 +9,7 @@ import {motionEstimate,smoothPath,correctionAt,stabilizationSampleCount} from '.
 import {drawTextCanvas,drawTextRasterCanvas} from './text-render.js';
 import {motionTransform} from './motion-transform.js';
 import {frameAtTimestamp} from './frame-source.js';
+import {transitionState,drawTransitionLayer} from './transition.js';
 let cancelled=false,limiter={gain:1};
 const check=()=>{if(cancelled)throw new DOMException('書き出しを中止しました。','AbortError')};
 const progress=(operation,value)=>postMessage({type:'progress',operation,value});
@@ -66,7 +67,7 @@ async function frameReader(row,res,cfg,start=row.start){
  }catch(e){still?.close();throw e}
 }
 async function render(p,files,preview,outputPath){limiter={gain:1};delayStates.clear();
- const cfg=outputSettings(p,preview),hidden=layer=>!!p.videoTracks?.[layer]?.hidden,overlayHidden=item=>!!p.overlayTracks?.[item.layer||0]?.hidden,videoProject={...p,clips:p.clips.filter(c=>!hidden(c.layer||0)),audioClips:[]},rows=visibleSequence(videoProject),sourceAudioRows=sequence(videoProject),effects=(p.effects||[]).filter(e=>!overlayHidden(e)),texts=(p.texts||[]).filter(t=>!overlayHidden(t)),resources=new Map(),textBitmaps=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null];let painter;
+ const cfg=outputSettings(p,preview),hidden=layer=>!!p.videoTracks?.[layer]?.hidden,overlayHidden=item=>!!p.overlayTracks?.[item.layer||0]?.hidden,videoProject={...p,clips:p.clips.filter(c=>!hidden(c.layer||0)),audioClips:[]},rows=visibleSequence(videoProject),sourceAudioRows=sequence(videoProject),effects=(p.effects||[]).filter(e=>!overlayHidden(e)),texts=(p.texts||[]).filter(t=>!overlayHidden(t)),resources=new Map(),textBitmaps=new Map();let output,handle,fileHandle,root,path,success=false;const activeInputs=[],sessions=[null,null,null],transitionSessions=[null,null,null];let painter;
  try{
  if(!globalThis.VideoEncoder||!globalThis.AudioEncoder||!globalThis.OffscreenCanvas)throw Error('このブラウザは端末内書き出しに未対応です。最新のiOSのSafariで開いてください。');
  if(!await canEncodeVideo('avc',{width:cfg.width,height:cfg.height,bitrate:cfg.bitrate})||!await canEncodeAudio('aac',{sampleRate:48000,numberOfChannels:2}))throw Error('選択したH.264/AAC設定に端末が対応していません。1080p・30fpsをお試しください。');
@@ -79,15 +80,20 @@ async function render(p,files,preview,outputPath){limiter={gain:1};delayStates.c
  output=new Output({format:new Mp4OutputFormat({fastStart:'reserve'}),target:new StreamTarget(stream,{chunked:true,chunkSize:1024*1024})});
  const picture=canvas(cfg.width,cfg.height),processed=canvas(cfg.width,cfg.height),ctx=picture.getContext('2d',{alpha:false,colorSpace:'srgb'});painter=renderer(processed,{width:cfg.width,height:cfg.height,preserve:true});if(!painter)throw Error('映像処理用GPUを利用できません。');
  const videoSource=new CanvasSource(picture,{codec:'avc',quality:new Quality({bitrate:cfg.bitrate}),keyFrameInterval:2});const audioSource=new AudioSampleSource({codec:'aac',quality:new Quality({bitrate:cfg.audioBitrate})});output.addVideoTrack(videoSource,{frameRate:cfg.fps,maximumPacketCount:cfg.frames+8});output.addAudioTrack(audioSource,{maximumPacketCount:Math.ceil(cfg.duration*48000/1024)+100});await output.start();let frameIndex=0,audioTime=0;
- const layerRows=[0,1,2].map(layer=>visibleSequence({...videoProject,clips:sequence(videoProject).filter(r=>r.layer===layer).map(r=>({...r.clip,start:r.start}))})),indices=[0,0,0];
+ const timelineRows=sequence(videoProject),originalLayerRows=[0,1,2].map(layer=>timelineRows.filter(row=>row.layer===layer)),layerRows=[0,1,2].map(layer=>visibleSequence({...videoProject,clips:timelineRows.filter(r=>r.layer===layer).map(r=>({...r.clip,start:r.start}))})),indices=[0,0,0];
  while(frameIndex<cfg.frames){
  check();const t=frameIndex/cfg.fps;ctx.globalAlpha=1;ctx.fillStyle='#000';ctx.fillRect(0,0,cfg.width,cfg.height);
  const active=layerRows.map((list,k)=>{while(indices[k]<list.length&&list[indices[k]].end<=t+1e-8)indices[k]++;const r=list[indices[k]];return r&&r.start<=t&&!r.clip.gap?r:null});
  for(let k=0;k<3;k++){
- const row=active[k],alpha=clipAlpha(row,t),occluded=active.some((r,j)=>j>k&&clipAlpha(r,t)>=1);
+ const row=active[k],alpha=clipAlpha(row,t),state=row&&transitionState(row,originalLayerRows[k],t),occluded=active.some((r,j)=>j>k&&clipAlpha(r,t)>=1&&!transitionState(r,originalLayerRows[j],t));
  if(!row||occluded){if(sessions[k]){await sessions[k].reader.close();sessions[k]=null}continue}
+ if(state){
+  const previous=state.previous,key=previous.clip.id+'|'+row.clip.id,freezeAt=previous.clip.freezeAt??Math.max(previous.clip.in,previous.clip.out-1e-6),frozen={...previous.clip,freezeDuration:state.duration,freezeAt,opacity:clipAlpha(previous,Math.max(previous.start,previous.end-1e-6)),opacityKeyframes:[],fadeIn:0,fadeOut:0},frozenRow={clip:frozen,layer:k,start:row.start,end:row.start+state.duration,duration:state.duration};
+  if(transitionSessions[k]?.key!==key){if(transitionSessions[k])await transitionSessions[k].reader.close();transitionSessions[k]={key,reader:await frameReader(frozenRow,resources.get(previous.clip.media),cfg,t)}}
+  const outgoing=await transitionSessions[k].reader.frame(t);painter.draw(outgoing,motionTransform(previous.clip,Math.max(0,previous.duration-1e-6),previous.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=frozen.opacity;drawTransitionLayer(ctx,processed,state,cfg.width,cfg.height,'outgoing');
+ }else if(transitionSessions[k]){await transitionSessions[k].reader.close();transitionSessions[k]=null}
  if(sessions[k]?.row!==row){if(sessions[k])await sessions[k].reader.close();sessions[k]={row,reader:await frameReader(row,resources.get(row.clip.media),cfg,t)}}
- const frame=await sessions[k].reader.frame(t);painter.draw(frame,motionTransform(row.clip,t-row.start,row.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;ctx.drawImage(processed,0,0);ctx.globalAlpha=1;
+ const frame=await sessions[k].reader.frame(t);painter.draw(frame,motionTransform(row.clip,t-row.start,row.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;drawTransitionLayer(ctx,processed,state,cfg.width,cfg.height,'incoming');ctx.globalAlpha=1;
  }
  for(const e of effects){const alpha=effectAlpha(e,t);if(alpha){ctx.globalAlpha=alpha;ctx.fillStyle=e.type==='flash'?'#fff':'#000';ctx.fillRect(0,0,cfg.width,cfg.height)}}ctx.globalAlpha=1;
  for(const text of texts){const bitmap=textBitmaps.get(text.id);bitmap?drawTextRasterCanvas(ctx,text,bitmap,t,cfg.width,cfg.height):drawTextCanvas(ctx,text,t,cfg.width,cfg.height)}await videoSource.add(t,Math.min(1/cfg.fps,cfg.duration-t));frameIndex++;
@@ -96,6 +102,6 @@ async function render(p,files,preview,outputPath){limiter={gain:1};delayStates.c
  }
  check();progress('MP4を確定中',.96);await output.finalize();handle.flush();handle.close();handle=null;const file=await fileHandle.getFile();const verify=open(file);let videoDuration=0,audioDuration=0;try{const v=await verify.getPrimaryVideoTrack(),a=await verify.getPrimaryAudioTrack();videoDuration=await v?.computeDuration()||0;audioDuration=await a?.computeDuration()||0;const videoTolerance=Math.max(.001,1/cfg.fps);if(v?.codec!=='avc'||a?.codec!=='aac'||Math.abs(videoDuration-cfg.duration)>videoTolerance||audioDuration<cfg.duration-1/48000||audioDuration>cfg.duration+.12)throw Error('生成した動画の検証に失敗しました。');let count=0;for await(const sample of new VideoSampleSink(v).samples()){try{check();count++;if(count%30===0)progress('完成動画を検証中',.96+.025*count/cfg.frames)}finally{sample.close()}}if(count!==cfg.frames)throw Error('完成動画のフレーム数が一致しません。');let audioPackets=0;for await(const sample of new AudioSampleSink(a).samples()){sample.close();check();if(++audioPackets%200===0)progress('完成音声を検証中',.99);}}finally{verify.dispose()}
  check();success=true;return{file,path,verified:true,videoDuration,audioDuration,...cfg};
- }finally{for(const session of sessions)await session?.reader.close();if(output&&output.state!=='finalized')await output.cancel().catch(()=>{});handle?.close();if(!success&&root&&path)await root.removeEntry(path).catch(()=>{});painter?.dispose();for(const bitmap of textBitmaps.values())bitmap.close();for(const input of activeInputs)input.dispose();}
+ }finally{for(const session of [...sessions,...transitionSessions])await session?.reader.close();if(output&&output.state!=='finalized')await output.cancel().catch(()=>{});handle?.close();if(!success&&root&&path)await root.removeEntry(path).catch(()=>{});painter?.dispose();for(const bitmap of textBitmaps.values())bitmap.close();for(const input of activeInputs)input.dispose();}
 }
 onmessage=async({data})=>{if(data.type==='cancel'){cancelled=true;return}if(data.type!=='render')return;cancelled=false;try{const result=await render(data.project,data.files,data.preview,data.outputPath);postMessage({type:'done',result})}catch(e){postMessage({type:'error',error:e.message,cancelled:cancelled||e.name==='AbortError'})}};

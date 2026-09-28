@@ -70,7 +70,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.6','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.7','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""
@@ -458,6 +458,7 @@ def clip_transition(c,clips=None,fps=30):
  value=c.get('transition') if isinstance(c.get('transition'),dict) else {}
  kind=value.get('type','none')
  if kind not in ('dissolve','slide','wipe','circle'):return None
+ previous_clip=None
  if clips is not None:
   layer=int(number(c.get('layer'),0,0,2));ends=[0.,0.,0.];rows=[]
   for item in clips:
@@ -465,15 +466,15 @@ def clip_transition(c,clips=None,fps=30):
   current=next((row for row in rows if row[0].get('id')==c.get('id')),None)
   previous=max((row for row in rows if current and row[0] is not current[0] and row[3]==layer and not row[0].get('gap') and row[2]<=current[1]+1e-7),key=lambda row:row[2],default=None)
   if not current or not previous or abs(previous[2]-current[1])>1/max(1,fps):return None
+  previous_clip=previous[0]
  direction=value.get('direction','left')
  if direction not in ('left','right','up','down'):direction='left'
- return {'type':kind,'direction':direction,'duration':number(value.get('duration'),.6,.1,2)}
+ return {'type':kind,'direction':direction,'duration':number(value.get('duration'),.6,.1,2),'previous':previous_clip}
 
 def transition_video_graph(value,duration,window_duration,w,h,fps,pixel):
  """Build the same smoothstep transition used by browser preview/export."""
  phase=f'min(max(T/{duration:.9f},0),1)';ease=f'({phase})*({phase})*(3-2*({phase}))'
- prepare=(f"[0:v]reverse,trim=duration={max(.1,2/fps):.9f},reverse,trim=duration={1/fps:.9f},"
-          f"setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={duration:.9f},format={pixel},settb=AVTB[old];"
+ prepare=(f"[0:v]setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration={duration:.9f},format={pixel},settb=AVTB[old];"
           f"[1:v]format={pixel},settb=AVTB,setpts=PTS-STARTPTS[new];")
  kind=value['type'];direction=value['direction']
  if kind=='slide':
@@ -609,11 +610,21 @@ def render(job,project,preview=False,_token=None,_size=None):
    transition=clip_transition(c,raw_clips,fps)
    if transition and len(outputs)>1 and offset<1/fps+1e-7:
     td=min(transition['duration'],window_duration);previous=outputs[-2];blended=work/f'clip-{idx:04d}-transition{ext}'
-    # The timeline keeps its duration: hold the completed composite's final
-    # frame under the incoming clip, then reveal/push it for the chosen span.
+    # Continue the outgoing source beyond its edit point when a media handle is
+    # available. Only clips cut at the physical end of a file fall back to the
+    # final frame, matching the browser and device renderers.
+    previous_clip=transition.get('previous') or {};previous_media=MEDIA.get(previous_clip.get('media'));old_input=['-sseof',str(-1/max(1,fps)),'-i',previous]
+    available=max(0,number(previous_media.get('duration'),0)-number(previous_clip.get('out'),0)) if previous_media and previous_media.get('kind')!='image' and not previous_clip.get('freezeDuration') else 0
+    if available>1e-4:
+     natural_speed=max(.05,number(previous_clip.get('endSpeed'),previous_clip.get('speed',1),.05,20));source_span=min(available,td*natural_speed);tail_speed=max(.05,source_span/td);tail=work/f'clip-{idx:04d}-outgoing{ext}'
+     tail_vf=tone(previous_media);tail_grade=color_filters(previous_clip.get('color',{}),number(previous_clip.get('lookAmount'),1,0,1.5));tail_vf+=(['format=gbrpf32le']+tail_grade if tail_grade else [])
+     tail_vf+=spatial_filters(w,h,number(previous_clip.get('scale'),1,.1,3),number(previous_clip.get('x'),.5,0,1),number(previous_clip.get('y'),.5,0,1))
+     tagged=all(previous_media.get(k) not in (None,'','unknown') for k in ('transfer','primaries','matrix'));tail_precision='zscale=matrix=709:range=limited:dither=error_diffusion' if caps.get('hdr') and tagged else 'scale=out_color_matrix=bt709:out_range=tv:flags=lanczos+accurate_rnd+full_chroma_int:sws_dither=auto'
+     tail_vf+=['settb=AVTB',f'setpts=(PTS-STARTPTS)/{tail_speed:.9f}',f'fps={fps}',f'tpad=stop_mode=clone:stop_duration={td:.9f}',f'trim=duration={td:.9f}',tail_precision,f'format={pixel}','setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709']
+     run(job,['-ss',number(previous_clip.get('out'),0),'-t',source_span,'-i',previous_media['path'],'-an','-vf',','.join(tail_vf),*video_args,'-video_track_timescale','90000',tail],td,done/max(total,.001)*.85,0);old_input=['-i',tail]
     graph=transition_video_graph(transition,td,window_duration,w,h,fps,pixel)
     job['operation']=f"トランジション {idx+1}/{len(clips)} を合成中"
-    run(job,['-sseof',-.2,'-i',previous,'-i',part,'-filter_complex',graph,'-map','[v]','-map','1:a?',*video_args,'-c:a','copy','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',blended],window_duration,done/max(total,.001)*.85,0)
+    run(job,[*old_input,'-i',part,'-filter_complex',graph,'-map','[v]','-map','1:a?',*video_args,'-c:a','copy','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709','-video_track_timescale','90000',blended],window_duration,done/max(total,.001)*.85,0)
     part.unlink();blended.replace(part)
    done+=window_duration
    if (work/'stabilized.mov').exists():(work/'stabilized.mov').unlink()

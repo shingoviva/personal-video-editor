@@ -9,7 +9,7 @@ import {motionEstimate,smoothPath,correctionAt,stabilizationSampleCount} from '.
 import {drawTextCanvas,drawTextRasterCanvas} from './text-render.js';
 import {motionTransform} from './motion-transform.js';
 import {frameAtTimestamp} from './frame-source.js';
-import {transitionState,drawTransitionLayer} from './transition.js';
+import {transitionState,drawTransitionLayer,outgoingTransitionRow} from './transition.js';
 let cancelled=false,limiter={gain:1};
 const check=()=>{if(cancelled)throw new DOMException('書き出しを中止しました。','AbortError')};
 const progress=(operation,value)=>postMessage({type:'progress',operation,value});
@@ -88,9 +88,9 @@ async function render(p,files,preview,outputPath){limiter={gain:1};delayStates.c
  const row=active[k],alpha=clipAlpha(row,t),state=row&&transitionState(row,originalLayerRows[k],t),occluded=active.some((r,j)=>j>k&&clipAlpha(r,t)>=1&&!transitionState(r,originalLayerRows[j],t));
  if(!row||occluded){if(sessions[k]){await sessions[k].reader.close();sessions[k]=null}continue}
  if(state){
-  const previous=state.previous,key=previous.clip.id+'|'+row.clip.id,freezeAt=previous.clip.freezeAt??Math.max(previous.clip.in,previous.clip.out-1e-6),frozen={...previous.clip,freezeDuration:state.duration,freezeAt,opacity:clipAlpha(previous,Math.max(previous.start,previous.end-1e-6)),opacityKeyframes:[],fadeIn:0,fadeOut:0},frozenRow={clip:frozen,layer:k,start:row.start,end:row.start+state.duration,duration:state.duration};
-  if(transitionSessions[k]?.key!==key){if(transitionSessions[k])await transitionSessions[k].reader.close();transitionSessions[k]={key,reader:await frameReader(frozenRow,resources.get(previous.clip.media),cfg,t)}}
-  const outgoing=await transitionSessions[k].reader.frame(t);painter.draw(outgoing,motionTransform(previous.clip,Math.max(0,previous.duration-1e-6),previous.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=frozen.opacity;drawTransitionLayer(ctx,processed,state,cfg.width,cfg.height,'outgoing');
+  const previous=state.previous,key=previous.clip.id+'|'+row.clip.id,outgoingState=outgoingTransitionRow(state,row,resources.get(previous.clip.media)?.duration);
+  if(transitionSessions[k]?.key!==key){if(transitionSessions[k])await transitionSessions[k].reader.close();transitionSessions[k]={key,reader:await frameReader(outgoingState.row,resources.get(previous.clip.media),cfg,t)}}
+  const outgoing=await transitionSessions[k].reader.frame(t);painter.draw(outgoing,motionTransform(outgoingState.row.clip,t-row.start,outgoingState.row.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=outgoingState.row.clip.opacity??1;drawTransitionLayer(ctx,processed,state,cfg.width,cfg.height,'outgoing');
  }else if(transitionSessions[k]){await transitionSessions[k].reader.close();transitionSessions[k]=null}
  if(sessions[k]?.row!==row){if(sessions[k])await sessions[k].reader.close();sessions[k]={row,reader:await frameReader(row,resources.get(row.clip.media),cfg,t)}}
  const frame=await sessions[k].reader.frame(t);painter.draw(frame,motionTransform(row.clip,t-row.start,row.duration),`${cfg.width}:${cfg.height}`);ctx.globalAlpha=alpha;drawTransitionLayer(ctx,processed,state,cfg.width,cfg.height,'incoming');ctx.globalAlpha=1;

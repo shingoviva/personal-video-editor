@@ -28,6 +28,15 @@ with tempfile.TemporaryDirectory(prefix='pve-real-transition-engine-') as data:
  test_result=core.render({'id':'real-transition-preview','cancel':False},project(True),preview=True);test=core.ROOT/'cache'/test_result['file']
  final_base_result=core.render({'id':'real-transition-final-base','cancel':False},project(False,60),preview=False);final_base=core.ROOT/'exports'/final_base_result['file']
  final_result=core.render({'id':'real-transition-final','cancel':False},project(True,60),preview=False);final=core.ROOT/'exports'/final_result['file']
+ def tail_project(fps=30):
+  values=[]
+  for i,(m,a,b,_) in enumerate(specs[:-1]):
+   available=max(0,m['duration']-b);span=min(available,.8);speed=max(.05,span/.8)
+   values.append({'id':f'tail-{i}','media':m['id'],'in':b,'out':b+span,'start':2+i*2,'layer':0,'speed':speed,'endSpeed':speed,'curve':'constant','stabilization':'OFF','audio':{'volume':0,'mute':True},'color':{}})
+  value=project(False,fps);value['clips']=values;return value
+ tail_preview_result=core.render({'id':'real-transition-tail-preview','cancel':False},tail_project(),preview=True);tail_preview=core.ROOT/'cache'/tail_preview_result['file']
+ tail_final_result=core.render({'id':'real-transition-tail-final','cancel':False},tail_project(60),preview=False);tail_final=core.ROOT/'exports'/tail_final_result['file']
+ shutil.copy2(tail_preview,artifact/'preview-outgoing-tails.mp4');shutil.copy2(tail_final,artifact/'final-60fps-outgoing-tails.mp4')
  shutil.copy2(base,artifact/'preview-hard-cuts.mp4');shutil.copy2(test,artifact/'preview-all-transitions.mp4');shutil.copy2(final_base,artifact/'final-60fps-hard-cuts.mp4');shutil.copy2(final,artifact/'final-60fps-all-transitions.mp4')
  for path,result in ((test,test_result),(final,final_result)):
   info=core.validate_output(path,10,True);assert info['duration']>9.95 and info['audio'];assert result['duration']==10
@@ -36,14 +45,16 @@ with tempfile.TemporaryDirectory(prefix='pve-real-transition-engine-') as data:
   # 60fps frame around a concat boundary and would weaken the comparison.
   raw=subprocess.check_output(core.BASE+['-v','error','-i',path,'-vf',f'select=eq(n\\,{index})','-vsync','0','-frames:v','1','-f','image2pipe','-vcodec','png','pipe:1'])
   import io;return np.asarray(Image.open(io.BytesIO(raw)).convert('RGB'),dtype=np.float32)
+ def frame_at_time(path,seconds):
+  # Auxiliary tail renders can contain sparse leading time. Seek by their
+  # project timestamp so the expected outgoing frame matches the transition.
+  raw=subprocess.check_output(core.BASE+['-v','error','-ss',str(seconds),'-i',path,'-frames:v','1','-f','image2pipe','-vcodec','png','pipe:1'])
+  import io;return np.asarray(Image.open(io.BytesIO(raw)).convert('RGB'),dtype=np.float32)
  def ease(u):u=max(0,min(1,u));return u*u*(3-2*u)
  boundaries=[(2,'dissolve','left'),(4,'slide','left'),(6,'wipe','right'),(8,'circle','left')];checks=[];thumbs=[]
  for boundary,kind,direction in boundaries:
-  # The render deliberately freezes the actual last decoded outgoing frame.
-  # Sampling transition time zero gives that exact reference despite VFR.
-  old=frame(test,round(boundary*30))
   for offset in (.2,.4,.6):
-   index=round((boundary+offset)*30);current=frame(base,index);actual=frame(test,index);p=ease(offset/.8);h,w=actual.shape[:2];expected=np.zeros_like(actual)
+   index=round((boundary+offset)*30);old=frame_at_time(tail_preview,boundary+offset);current=frame(base,index);actual=frame(test,index);p=ease(offset/.8);h,w=actual.shape[:2];expected=np.zeros_like(actual)
    if kind=='dissolve':expected=old*(1-p)+current*p
    elif kind=='slide':
     shift_old=round(p*w);shift_new=round((1-p)*w)
@@ -68,9 +79,8 @@ with tempfile.TemporaryDirectory(prefix='pve-real-transition-engine-') as data:
   assert rms>.0001 and longest<240,(kind,rms,longest)
  # Repeat the pixel-accurate geometry check on the 1080×1920 / 60fps final path.
  for boundary,kind,direction in boundaries:
-  old=frame(final,round(boundary*60))
   for offset in (.2,.4,.6):
-   index=round((boundary+offset)*60);current=frame(final_base,index);actual=frame(final,index);p=ease(offset/.8);h,w=actual.shape[:2];expected=np.zeros_like(actual)
+   index=round((boundary+offset)*60);old=frame_at_time(tail_final,boundary+offset);current=frame(final_base,index);actual=frame(final,index);p=ease(offset/.8);h,w=actual.shape[:2];expected=np.zeros_like(actual)
    if kind=='dissolve':expected=old*(1-p)+current*p
    elif kind=='slide':
     shift_old=round(p*w);shift_new=round((1-p)*w)

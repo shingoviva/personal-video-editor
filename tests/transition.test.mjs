@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {clip,project,sequence,sanitize} from '../dist/model.js';
-import {normalizeTransition,transitionState,transitionStyles,drawTransitionLayer} from '../dist/transition.js';
+import {normalizeTransition,transitionState,transitionStyles,drawTransitionLayer,outgoingTransitionRow} from '../dist/transition.js';
 
 assert.deepEqual(normalizeTransition({type:'bogus',duration:20,direction:'diagonal'}),{type:'none',duration:2,direction:'left'});
 const p=project(),media={id:'movie',kind:'video',duration:8,width:1920,height:1080};
@@ -14,6 +14,10 @@ assert.equal(transitionState(incoming,rows,1.99),null);
 assert.equal(transitionState(incoming,rows,2).progress,0);
 assert(Math.abs(transitionState(incoming,rows,2.5).progress-.5)<1e-9);
 assert.equal(transitionState(incoming,rows,3),null);
+const movingOutgoing=outgoingTransitionRow(transitionState(incoming,rows,2.25),incoming,media.duration);
+assert.equal(movingOutgoing.moving,true);assert.equal(movingOutgoing.row.clip.in,2);assert.equal(movingOutgoing.row.clip.out,3);assert.equal(movingOutgoing.row.clip.freezeDuration,undefined);
+const frozenOutgoing=outgoingTransitionRow(transitionState(incoming,rows,2.25),incoming,2);
+assert.equal(frozenOutgoing.moving,false);assert.equal(frozenOutgoing.row.clip.freezeDuration,1);
 second.start=2.1;rows=sequence(p);incoming=rows.find(row=>row.clip.id==='second');assert.equal(transitionState(incoming,rows,2.1),null);second.start=2;rows=sequence(p);incoming=rows.find(row=>row.clip.id==='second');
 
 let styles=transitionStyles({...transitionState(incoming,rows,2.5),type:'slide'});

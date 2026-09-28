@@ -4,7 +4,10 @@ with tempfile.TemporaryDirectory(prefix='pve-transition-') as tmp:
  os.environ['PVE_DATA']=tmp;root=pathlib.Path(__file__).resolve().parent.parent;sys.path.insert(0,str(root/'engine'));import core
  media=[]
  for name,color,freq in [('first','red',440),('second','blue',660)]:
-  path=pathlib.Path(tmp)/(name+'.mp4');subprocess.run(core.BASE+['-f','lavfi','-i',f'color=c={color}:s=160x90:r=30:d=1','-f','lavfi','-i',f'sine=frequency={freq}:sample_rate=48000:duration=1','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-shortest',path],capture_output=True,check=True);media.append(core.inspect(path,name,path.name))
+  path=pathlib.Path(tmp)/(name+'.mp4')
+  if name=='first':args=['-f','lavfi','-i',f'color=c={color}:s=160x90:r=30:d=1.4','-f','lavfi','-i','color=white:s=20x15:r=30:d=1.4','-f','lavfi','-i',f'sine=frequency={freq}:sample_rate=48000:duration=1.4','-filter_complex',"[0:v][1:v]overlay=x='mod(t*80,140)':y=4[v]",'-map','[v]','-map','2:a']
+  else:args=['-f','lavfi','-i',f'color=c={color}:s=160x90:r=30:d=1.4','-f','lavfi','-i',f'sine=frequency={freq}:sample_rate=48000:duration=1.4']
+  subprocess.run(core.BASE+args+['-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac','-shortest',path],capture_output=True,check=True);media.append(core.inspect(path,name,path.name))
  def clip(m,start):return{'id':f"{m['id']}-{start}",'media':m['id'],'in':0,'out':.8,'start':start,'layer':0,'speed':1,'endSpeed':1,'curve':'constant','stabilization':'OFF','audio':{'volume':1,'mute':False},'color':{}}
  clips=[clip(media[i%2],i*.8) for i in range(5)]
  for value,kind,direction in zip(clips[1:],('dissolve','slide','wipe','circle'),('left','left','right','left')):value['transition']={'type':kind,'duration':.6,'direction':direction}
@@ -15,6 +18,10 @@ with tempfile.TemporaryDirectory(prefix='pve-transition-') as tmp:
  assert before[0]>150 and before[2]<80,before
  assert middle[0]>50 and middle[2]>50,middle
  assert after[2]>150 and after[0]<80,after
+ # The outgoing red source has a moving white marker after its edit point.
+ # Green at x=90 during the dissolve proves that the tail is decoded instead
+ # of holding the frame captured at 0.8 seconds (where the marker ends at x=84).
+ moving_tail=pixel(.9,90/159,.1);assert moving_tail[1]>100,moving_tail
  slide_left,slide_right=pixel(1.9,.2),pixel(1.9,.8);assert slide_left[2]>120 and slide_right[0]>120,(slide_left,slide_right)
  wipe_left,wipe_right=pixel(2.7,.2),pixel(2.7,.8);assert wipe_left[0]>120 and wipe_right[2]>120,(wipe_left,wipe_right)
  circle_center,circle_corner=pixel(3.5,.5,.5),pixel(3.5,.05,.05);assert circle_center[0]>120 and circle_corner[2]>120,(circle_center,circle_corner)

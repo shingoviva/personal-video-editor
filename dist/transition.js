@@ -10,6 +10,12 @@ export function transitionState(row,rows,time){
  const raw=clamp(local/Math.min(transition.duration,row.duration)),progress=raw*raw*(3-2*raw);
  return{...transition,raw,progress,previous};
 }
+export function outgoingTransitionRow(state,incomingRow,mediaDuration=0){
+ if(!state?.previous||!incomingRow)return null;const previous=state.previous,clip=previous.clip,duration=Math.min(state.duration,incomingRow.duration),endTransform={scale:clip.scale,x:clip.x,y:clip.y};
+ const speed=Math.max(.05,Number(clip.endSpeed??clip.speed)||1),available=Math.max(0,Number(mediaDuration||0)-Number(clip.out||0));
+ if(!clip.freezeDuration&&clip.kind!=='image'&&available>1e-4){const span=Math.min(available,duration*speed),tailSpeed=Math.max(.05,span/duration),tail={...clip,...endTransform,motionPreset:'none',scaleKeyframes:[],in:clip.out,out:clip.out+span,speed:tailSpeed,endSpeed:tailSpeed,curve:'constant',hold:0,opacity:clip.opacity??1,opacityKeyframes:[],fadeIn:0,fadeOut:0};return{row:{clip:tail,layer:previous.layer,start:incomingRow.start,end:incomingRow.start+duration,duration},moving:true}}
+ const freezeAt=clip.freezeAt??Math.max(clip.in,clip.out-1e-6),frozen={...clip,...endTransform,motionPreset:'none',scaleKeyframes:[],freezeDuration:duration,freezeAt,opacity:clip.opacity??1,opacityKeyframes:[],fadeIn:0,fadeOut:0};return{row:{clip:frozen,layer:previous.layer,start:incomingRow.start,end:incomingRow.start+duration,duration},moving:false};
+}
 export function transitionStyles(state){
  const base={opacity:'1',transform:'none',clipPath:'none'};if(!state)return{incoming:base,outgoing:base};const p=state.progress,d=state.direction;
  if(state.type==='dissolve')return{incoming:{...base,opacity:String(p)},outgoing:base};

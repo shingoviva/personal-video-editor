@@ -1,4 +1,5 @@
 const translations=[
+ ['フェードイン','Fade in'],['フェードアウト','Fade out'],['無音から始まり、無音へ終わります。','Fade from silence and back to silence.'],['透明から始まり、透明へ終わります。下の素材がない部分は黒になります。','Fade from transparent and back to transparent. Empty areas appear black.'],
  ['最初の素材を、ここへ。','Bring your first shot here.'],['動画・静止画・音声をまとめて追加','Add video, stills, and audio'],['素材は外部へアップロードされません。','Media never leaves this device.'],
  ['素材パネルを広げる／戻す','Expand or restore media panel'],['設定パネルを広げる／戻す','Expand or restore inspector'],['プレビューとタイムラインの高さを調整','Resize preview and timeline'],
  ['タイムラインには自動配置しません。','Files stay in the library until you place them.'],['一覧へ追加。','Add to the library.'],['タイムラインへドラッグ','Drag to timeline'],['選択して配置','Select, then place'],

@@ -44,6 +44,7 @@ def render_tracks(job,project,clips,work,total,track_key='audioTracks',layers=4,
    edge=min(.008,(duration+hold)/2);fi=max(edge,core.number(audio.get('fadeIn'),0,0,(duration+hold)/2));fo=max(edge,core.number(audio.get('fadeOut'),0,0,(duration+hold)/2));volume=gain*core.number(audio.get('volume'),1,0,2)
    af=f'volume={volume},'
    if audio.get('gainKeyframes'):af+=f"volume='{core.keyframe_expression(audio['gainKeyframes'],duration+hold,2,'t')}':eval=frame,"
+   if audio.get('gainEnvelope'):af+=f"asetnsamples=n=64:p=0,volume='{core.gain_envelope_expression(audio['gainEnvelope'],duration+hold,'t')}':eval=frame,"
    af+=f'apad,atrim=duration={duration+hold}'
    if audio.get('delayEnabled'):
     delay_ms=round(core.number(audio.get('delayTime'),.28,.02,2)*1000);decay=core.number(audio.get('delayFeedback'),.35,0,.85)*core.number(audio.get('delayMix'),.25,0,.8)

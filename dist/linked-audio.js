@@ -1,4 +1,5 @@
-import {sequence,splitClip,sourceOffset} from './model.js';
+import {sequence,splitClip,sourceOffset,timing} from './model.js';
+import {remapEnvelope} from './clip-envelope.js';
 
 export function linkedAudio(project,videoId){
  return (project.audioClips||[]).find(a=>a.linked!==false&&a.sourceClip===videoId);
@@ -10,9 +11,11 @@ export function linkedVideo(project,audio){
 
 export function syncLinkedAudio(project,video){
  const audio=video&&linkedAudio(project,video.id);if(!audio)return null;
+ const oldNodes=timing(audio).nodes,oldIn=audio.in;
  for(const key of ['start','in','out','speed','endSpeed','curve','hold','timingBase']){
   if(video[key]===undefined)delete audio[key];else audio[key]=structuredClone(video[key]);
  }
+ if(audio.audio?.gainEnvelope?.length)audio.audio.gainEnvelope=remapEnvelope(audio.audio.gainEnvelope,oldNodes,timing(audio).nodes,oldIn,audio.in);
  audio.layer=Math.max(0,Math.min(3,audio.layer||0));return audio;
 }
 

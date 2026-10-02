@@ -40,6 +40,25 @@ def keyframe_expression(points,duration,maximum=3,time_expr='t',minimum=0):
   u=f'max(0,min(1,(({time_expr})-{a:.9f})/{max(1e-6,b-a):.9f}))';smooth=f'({u})*({u})*(3-2*({u}))';expr=f'if(lt({time_expr},{b:.9f}),({av:.9f}+({bv-av:.9f})*({smooth})),{expr})'
  return f'if(lt({time_expr},{values[0][0]:.9f}),{values[0][1]:.9f},{expr})'
 
+def gain_envelope_expression(points,duration,time_expr='t',step_ramp=.005):
+ values=[]
+ for point in (points or [])[:256]:
+  if isinstance(point,dict):values.append((number(point.get('time'),0,0,duration),number(point.get('valueDb',point.get('db')),0,-96,12),'hold' if point.get('interpolation')=='hold' or point.get('curve')=='hold' else 'linear'))
+ values=sorted({time:(db,curve) for time,db,curve in values}.items())
+ if not values:return '1'
+ gain=lambda db:f'pow(10,{db:.9f}/20)'
+ expr=gain(values[-1][1][0])
+ for (a,(av,curve)),(b,(bv,_)) in reversed(list(zip(values,values[1:]))):
+  span=max(1e-6,b-a)
+  if curve=='hold':
+   ramp=min(max(0,step_ramp),span/2);start=b-ramp
+   if ramp:segment=f'if(lt({time_expr},{start:.9f}),{gain(av)},pow(10,({av:.9f}+({bv-av:.9f})*max(0,min(1,(({time_expr})-{start:.9f})/{ramp:.9f})))/20))'
+   else:segment=gain(av)
+  else:
+   u=f'max(0,min(1,(({time_expr})-{a:.9f})/{span:.9f}))';segment=f'pow(10,({av:.9f}+({bv-av:.9f})*({u}))/20)'
+  expr=f'if(lt({time_expr},{b:.9f}),{segment},{expr})'
+ return f'if(lt({time_expr},{values[0][0]:.9f}),{gain(values[0][1][0])},{expr})'
+
 def scale_keyframe_expression(clip,duration,nodes):
  points=clip.get('scaleKeyframes',[])[:32]
  if not points:return None
@@ -70,7 +89,7 @@ def capabilities():
  f=subprocess.run([FFMPEG,'-hide_banner','-filters'],capture_output=True,text=True).stdout
  e=subprocess.run([FFMPEG,'-hide_banner','-encoders'],capture_output=True,text=True).stdout
  ready='libx264' in e;stabilization='vidstabtransform' in f;hdr='zscale' in f and 'tonemap' in f;drawtext='drawtext' in f;text_raster='overlay' in f;text=drawtext or text_raster;prores='prores_ks' in e;motion='minterpolate' in f
- return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.7','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
+ return {'ready':ready,'complete':ready and stabilization and hdr and text and prores and motion,'stabilization':stabilization,'hdr':hdr,'text':text,'drawtext':drawtext,'textRaster':text_raster,'prores':prores,'motionInterpolation':motion,'videotoolbox':'h264_videotoolbox' in e,'build':'2.2.8','engine':'Native FFmpeg','version':subprocess.run([FFMPEG,'-version'],capture_output=True,text=True).stdout.splitlines()[0]}
 
 def preflight_render(project,clips=None,caps=None):
  """Fail before rendering when the chosen edit needs a missing FFmpeg feature."""

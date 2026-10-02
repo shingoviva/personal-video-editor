@@ -544,3 +544,19 @@ Chromeの1440×1000と402×874相当で、レイアウト、工程切り替え�
 - 再生は0.00秒から4.82秒まで進行。PerformanceObserverで50ms超のLong Taskは0件、requestAnimationFrame間隔の95パーセンタイルは16.8ms。ヘッドレスChromeでの短尺参考値であり、実機Safariや長尺4K性能を示す値ではない。
 - `.project` 保存後に再読み込みし、素材2、動画クリップ3、テロップ2、FX2が保存前と一致。画面上でもF/T3からV1までの行名とタイムライン行が揃うことを確認。
 - `npm test`、`npm run build`、`validate_pipeline.py`、`validate_formats.py`、`server.test.py`、`reliability.test.py` はすべてPASS。
+
+## v2.2.8 — Clip Gain Envelope（2026-10-02）
+
+- 0 → -12 → 0 dB、0 dBスナップ／Reset、Linear／Hold、5msのStepランプ、Fade In／Outを自動検証した。
+- Split点の補間Gain継承、Trim後のローカル時刻、複製の独立コピー、移動、速度変更、旧Gainポイントからの移行、Undo／Redo、Delete操作を確認した。
+- Chrome実画面でCanvas上のBreakpointを直接操作し、0.0 dB表示、右クリックのHold、追加・削除、Undo／Redoを確認した。
+- Mac FFmpegでEnvelope付きH.264/AACを実生成し、0 dB／-12 dB／0 dBの実波形とStep境界の連続性、全尺デコードを確認した。ブラウザ端末書き出しは同じ共通Gain関数のPCM試験を通過した。
+- 200クリップ×各256点を100,000回評価する負荷試験を実行し、BreakpointごとのDOMを使わずCanvas 1枚／クリップで描画する構造を確認した。
+- iPhone 16 Pro Safariでのタッチ操作、実機スピーカー／ヘッドホンによるクリックノイズ聴感、長時間プロジェクトの実測は未確認。
+
+### Envelopeの視認性・音声時刻追従（2026-10-03）
+
+- Chromeで実WAVの波形と0／-12／0 dBのCanvasラインを目視確認。ポイント操作後もクリップの開始位置・IN・OUTが不変で、再生時のJavaScript例外は0件。
+- 100音声クリップ・各256点を読み込み、20回の縦スクロール操作を51msで処理した（ヘッドレスChromeの操作測定。実機FPSや長時間性能を示さない）。
+- 異なる速度ランプ間でBreakpointの元音声位置と往復変換を検証。Trim時は元の速度区間を保持する。
+- Previewへ予約したGainサンプルと共通Export計算を比較。5ms Step、既存Clip Gain、8msの境界保護を共有。実スピーカーの聴感、Safariタッチ、長時間素材、Mac URLからの波形読込は未確認。

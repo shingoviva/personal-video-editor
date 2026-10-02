@@ -36,7 +36,7 @@ const restored=sanitize(JSON.parse(saved));
 assert.deepEqual(restored,expected);
 assert.equal(restored.clips.length,3);assert.equal(restored.audioTracks.length,4);
 assert.equal(restored.texts.length,3);assert.equal(restored.effects.length,3);
-assert.equal(restored.videoTracks[2].hidden,true);assert.equal(restored.audioClips[0].linked,true);assert.deepEqual(restored.audioClips[0].audio.gainKeyframes,[{time:.2,value:.1},{time:2.5,value:1.4}]);
+assert.equal(restored.videoTracks[2].hidden,true);assert.equal(restored.audioClips[0].linked,true);assert.deepEqual(restored.audioClips[0].audio.gainKeyframes,[]);assert.deepEqual(restored.audioClips[0].audio.gainEnvelope,expected.audioClips[0].audio.gainEnvelope);assert.equal(restored.audioClips[0].audio.gainEnvelope.length,2);
 assert.equal(restored.videoTracks[1].volume,.45);assert.equal(restored.overlayTracks[2].hidden,true);assert.equal(restored.texts[2].layer,2);assert.equal(restored.effects[1].layer,1);
 assert.equal(restored.clips[0].opacityKeyframes.length,4);assert.deepEqual(restored.clips[0].scaleKeyframes,[{time:0,value:1},{time:6,value:2.25},{time:12,value:1}]);assert.deepEqual(restored.bgm.gainKeyframes,[{time:0,value:.2},{time:10,value:1.4}]);assert.deepEqual(restored.clips[0].scaleKeyframes,[{time:0,value:1},{time:6,value:2.25},{time:12,value:1}]);assert.deepEqual(restored.bgm.gainKeyframes,[{time:0,value:.2},{time:10,value:1.4}]);assert.equal(restored.clips[0].color.vignette,16);assert.equal(restored.texts[1].italic,true);
 assert.deepEqual(restored.fonts,p.fonts);

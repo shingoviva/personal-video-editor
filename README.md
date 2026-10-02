@@ -1,8 +1,16 @@
-# PERSONAL VIDEO EDITOR — V2 · 2.2.7
+# PERSONAL VIDEO EDITOR — V2 · 2.2.8
 
 フォトグラファーのためのローカル動画編集アプリ。Webの編集画面と、Macで動くネイティブFFmpegエンジンを同梱しています。
 
-**v2.2.7 公開版**です。トランジション中も前後の映像を動かし続け、編集点より後ろに残る元素材のフレームを前側映像へ使用します。元素材そのものの末尾だけは最終フレームを保持します。プレビュー、端末内MP4、Mac FFmpeg書き出しで同じ規則を使用し、iPhone 16 ProのHEVC/SDR/VFR実写素材2本で境界映像と音声を検証しています。iPhone 16 Pro Safari・実写4K/HDRの受け入れ試験は未実施です。
+**v2.2.8 公開版**です。音声クリップの波形上で、非破壊の音量エンベロープを直接編集できます。0 dBへのスナップ・リセット、Linear／Hold、フェード、分割・トリム・複製、Undo／Redoに対応します。プレビューと書き出しは同じdB評価規則を使用します。Safari実機での操作・聴感評価は未実施です。
+
+## 2.2.8 — CLIP GAIN ENVELOPE
+
+- 各音声クリップの波形へ、0 dB基準の非破壊Gain EnvelopeをCanvas描画します。Breakpointは上下でdB、左右でクリップ内時刻を調整し、Shiftドラッグで微調整できます。
+- 0 dBスナップ、ダブルクリックで0 dBへReset、Delete／Backspace削除、Linear／Hold（Step）補間、-96 dBまでのフェードに対応します。
+- Holdは編集上は段差として表示し、再生と書き出しでは5msの短いランプを使ってクリックノイズを抑えます。既存Clip Gain、IN/OUTフェードと乗算します。
+- Envelopeはクリップローカル時刻で保存し、移動、複製、Trim、Split、速度変更、Undo／Redoへ追従します。Split点には補間したGainを左右双方へ引き継ぎます。
+- プレビュー、端末内書き出し、Mac FFmpeg書き出しで同じdB値と `10^(dB/20)` 変換を使用します。
 
 ## 2.2.7 — CONTINUOUS TRANSITION PLAYBACK
 
@@ -525,3 +533,5 @@ Chromeによるデスクトップ／モバイル相当の表示と操作を確�
 - Mac版の速度ランプ音声は32-bit float PCMで中間処理し、最終ミックスは自動増幅を無効にしたリミッターを使用。再エンコード時のAACを48kHz・256kbpsへ固定しました。
 
 手ぶれ補正はGoogle ResearchのL1最適カメラ軌跡の考え方と、FFmpeg／vid.stabの実装・設定を参照しています。ブラウザ版は軽量な平行移動補正、Mac版はvid.stabの回転を含む補正です。
+
+Clip Gain Envelopeの波形は素材を順番にストリーム解析し、4096個のピーク値だけを保持します。0〜-24 dBの操作領域を広く取り、音量差を見やすくしました。速度ランプを変更してもBreakpointは同じ元音声位置へ追従します。Previewは音声クロック上へGain曲線を予約し、Stepの5msランプを画面更新頻度から独立させます。

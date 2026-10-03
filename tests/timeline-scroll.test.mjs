@@ -14,3 +14,13 @@ assert.equal(timelineLabelTransform(-10),'translate3d(0,-0px,0)');
 const implementation=fs.readFileSync(new URL('../dist/timeline-scroll.js',import.meta.url),'utf8');
 assert.doesNotMatch(implementation,/scroll\.scrollTop\s*=/,'vertical scrolling must never be rewritten or snapped');
 console.log('Timeline vertical scroll: continuous labels without scroll snapping PASS');
+
+const {edgeScrollVelocity}=await import('../dist/timeline-drag-scroll.js');
+assert.equal(edgeScrollVelocity(150,100,400),0);
+assert.equal(edgeScrollVelocity(90,100,400),0);
+assert.equal(edgeScrollVelocity(410,100,400),0);
+assert.equal(edgeScrollVelocity(100,100,400),-650);
+assert.equal(edgeScrollVelocity(400,100,400),650);
+assert.ok(Math.abs(edgeScrollVelocity(110,100,400))>Math.abs(edgeScrollVelocity(135,100,400)));
+assert.equal(edgeScrollVelocity(150,150,150),0);
+console.log('Drag scrolling: edge direction, gradual speed and outside bounds PASS');

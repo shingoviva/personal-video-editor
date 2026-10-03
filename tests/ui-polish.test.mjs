@@ -16,6 +16,6 @@ assert.match(css,/dialog:has\(\.help-intro\).*820px/);
 assert.match(app,/画面の見方/);
 assert.match(app,/プレビューの直接操作/);
 assert.match(app,/keyboard-sections/);
-assert.match(html,/style\.css\?v=2\.2\.10/);
-assert.match(html,/app\.js\?v=2\.2\.10/);
+assert.match(html,/style\.css\?v=2\.2\.11/);
+assert.match(html,/app\.js\?v=2\.2\.11/);
 console.log('UI polish: aligned lanes, contextual resize affordance and structured help PASS');

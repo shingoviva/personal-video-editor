@@ -1,4 +1,5 @@
 const translations=[
+ ['素材をドラッグしたままタイムラインの上下左右端へ近づけると、自動でスクロールします。','While dragging media, move near any edge of the timeline to scroll automatically.'],
  ['音声クリップのラインをクリックして音量ポイントを追加できます。点を上下に動かすと音量、左右に動かすと時刻を調整できます。','Click the line on an audio clip to add gain points. Drag vertically for gain and horizontally for time.'],
  ['素材は読み込み済みです。保存などの警告があります。','Media imported. There are storage or processing warnings.'],['詳細','Details'],['再開用の保存に失敗した素材は、専用フォルダへ保存するか、次回再リンクしてください。','Save affected media to a project folder or relink it next time.'],
  ['フェードイン','Fade in'],['フェードアウト','Fade out'],['無音から始まり、無音へ終わります。','Fade from silence and back to silence.'],['透明から始まり、透明へ終わります。下の素材がない部分は黒になります。','Fade from transparent and back to transparent. Empty areas appear black.'],

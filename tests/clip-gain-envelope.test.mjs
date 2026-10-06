@@ -29,3 +29,17 @@ const back=remapEnvelope(mapped,timing(after).nodes,timing(before).nodes);close(
 const {dbToY,yToDb}=await import('../dist/clip-envelope-ui.js');for(const db of [-96,-24,-12,-6,0,12])close(yToDb(dbToY(db,60),60),db);
 let curve;const graph={output:{gain:{cancelScheduledValues(){},setValueCurveAtTime(value){curve=value},setValueAtTime(){}}}};preview.context={currentTime:0};const automation={audio:{volume:.8,gainEnvelope:hold}};preview.scheduleGain(graph,automation,.9,2,1,true);assert(curve);for(const index of [0,Math.floor(curve.length*.5),curve.length-1])close(curve[index],gainAt(.9+.15*index/(curve.length-1),2,.8,0,0,[],hold)*Math.min(1,(2-(.9+.15*index/(curve.length-1)))/.008),1e-7);
 console.log('Source-anchored speed ramps, readable dB scale and scheduled preview/export gain samples PASS');
+
+const {snapEnvelopeDrag}=await import('../dist/clip-envelope-ui.js');
+for(const height of [40,60,100]){
+ const zero=dbToY(0,height);
+ for(const direction of [-1,1]){
+  const near=yToDb(zero+direction*4,height);
+  assert.deepEqual(snapEnvelopeDrag(near,height),{valueDb:0,latched:true});
+  assert.equal(snapEnvelopeDrag(yToDb(zero+direction*7,height),height,true).latched,true);
+  assert.equal(snapEnvelopeDrag(yToDb(zero+direction*9,height),height,true).latched,false);
+ }
+ assert.equal(snapEnvelopeDrag(yToDb(zero+1,height),height,false,true).valueDb,0);
+ assert.equal(snapEnvelopeDrag(yToDb(zero+5,height),height,true,true).latched,false);
+}
+console.log('Pixel-based 0 dB snap, hysteresis and fine dragging PASS');
